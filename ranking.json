@@ -1,5 +1,15 @@
 {
   "version": 1,
-  "entries": [],
-  "used": []
+  "entries": [
+    {
+      "id": "67971d3c-91c6-4e32-b663-38552f1ff09c",
+      "name": "iuri",
+      "ms": 29265,
+      "date": "2026-10-27T23:52:12.677Z",
+      "device": "desktop"
+    }
+  ],
+  "used": [
+    "67971d3c-91c6-4e32-b663-38552f1ff09c"
+  ]
 }
