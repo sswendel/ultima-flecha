@@ -14,7 +14,7 @@ O ranking global está **ativo**. Serviço: `https://ultima-flecha-ranking.wende
 ## Regras
 
 - Os 10 menores tempos de conclusão das cinco fases, com precisão de milissegundos. Empates preservam quem registrou primeiro.
-- Cronômetro usa tempo real, inclui espera após quedas e exclui pausas. Trocar de aplicativo pausa a partida. Modo treino não participa.
+- Cronômetro usa tempo real, zera ao morrer e exclui a espera para recomeçar e as pausas. Cada nova tentativa inicia uma nova sessão para o ranking. Trocar de aplicativo pausa a partida. Modo treino não conta tempo nem participa. O início de partida exige modo normal, assinado junto com a versão 2 das regras; comprovantes anteriores são rejeitados para evitar reaproveitar sessões da versão antiga.
 - PC e toque participam da mesma tabela; cada entrada guarda o tipo de controle. No toque há mira assistida.
 - Só quem pode entrar no top 10 recebe o campo de nome. Se alguém registrar uma marca melhor durante o preenchimento, o servidor recalcula a colocação ao salvar.
 - Nome/apelido de até 24 caracteres; nomes e tempos ficam públicos no arquivo e no histórico do GitHub. Não peça nome completo.

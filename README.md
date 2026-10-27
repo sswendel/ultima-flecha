@@ -61,7 +61,7 @@ HTML5 Canvas, CSS e JavaScript. Não requer instalação de dependências para j
 
 Controles de toque em tamanho fixo fora da arena, em retrato e paisagem. Arraste o joystick para mover, use DASH para desviar, ATIRAR para mirar no núcleo automaticamente ou arraste e solte na arena para mirar manualmente. Segure PUXAR para recuperar a flecha. Os controles aceitam dedos simultâneos e cancelam comandos ao perder foco. Para aproveitar melhor a arena, jogue com o celular deitado.
 
-O jogo pausa ao trocar de aplicativo ou girar a tela. O cronômetro usa tempo real em vez da duração limitada dos quadros, incluindo o intervalo de espera após cair. Recordes locais antigos são separados dos atuais por essa mudança de medição.
+O jogo pausa ao trocar de aplicativo ou girar a tela. O cronômetro usa tempo real em vez da duração limitada dos quadros, zerando ao morrer e contando somente a nova tentativa, sem somar a espera para recomeçar. Recordes locais antigos são separados dos atuais por essa mudança de medição.
 
 ## Ranking global
 

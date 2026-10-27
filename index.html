@@ -236,6 +236,7 @@ function iniciarFase(n){
   boss = {x: W/2, y: T+130, r: 56, ang: -Math.PI/2, ciclo: 0, estado: 'fechado', dirRot: 1, carga: 0, dashT: 0, dvx: 0, dvy: 1};
   projs = []; parts = []; fila = []; ondas = []; estado = 'play'; bannerT = 2.2; pausado = false; fade = 1;
 }
+function reiniciarTentativa(){ runT = 0; iniciarFase(modoTreino ? fase : 1); }
 function novaPartida(){ mortes = 0; mortesFase = [0, 0, 0, 0, 0]; runT = 0; iniciarFase(1); }
 
 /* ---------------------------- Ataques ---------------------------- */
@@ -269,7 +270,7 @@ function acertar(){
 }
 
 function morrer(){
-  estado = 'morto'; mortoT = 0; mortes++; mortesFase[fase-1]++; shake = 10;
+  estado = 'morto'; runT = 0; mortoT = 0; mortes++; mortesFase[fase-1]++; shake = 10;
   faiscas(player.x, player.y, '#fff', 30, 260); beep(220, .5, 'sawtooth', .1, -170);
 }
 
@@ -616,7 +617,7 @@ function desenharHUD(){
   let g = ctx.createLinearGradient(0, 0, 0, 56); g.addColorStop(0, 'rgba(0,0,0,.65)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 56);
   g = ctx.createLinearGradient(0, H-50, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.65)'); ctx.fillStyle = g; ctx.fillRect(0, H-50, W, 50);
   txt('FASE ' + fase + '/' + FASES, 56, 30, 16, '#c3cbe0', 'left', true);
-  txt(fmt(runT) + (modoTreino ? '  ·  modo treino' : ''), 56, 50, 13, '#8a93b3', 'left');
+  txt(modoTreino ? 'TREINO · sem cronômetro' : fmt(runT), 56, 50, 13, '#8a93b3', 'left');
   for(let i = 0; i < FASES; i++){
     const x = W/2 - (FASES-1)*14 + i*28, cheio = i < (estado === 'limpa' || estado === 'vitoria' ? fase : fase-1);
     if(cheio) luz(x, 24, 26, '95,242,255', .7);
@@ -702,7 +703,7 @@ function desenhar(){
       linhas(['O último estilhaço do núcleo se apaga e o Colosso vira poeira.',
               'A luz volta ao vale, e a sua flecha — a única — brilha uma última vez.',
               'O Observatório finalmente pode descansar.'], 262, 28, 18);
-      txt('Tempo: ' + fmt(runT) + (novoRec ? '  —  novo recorde!' : melhor !== null && !modoTreino ? '  (recorde ' + fmt(melhor) + ')' : ''), W/2, 380, 20, novoRec ? '#f2d98a' : '#c3cbe0');
+      txt((modoTreino ? 'Modo treino · sem tempo e sem ranking' : 'Tempo: ' + fmt(runT)) + (novoRec ? '  —  novo recorde!' : melhor !== null && !modoTreino ? '  (recorde ' + fmt(melhor) + ')' : ''), W/2, 380, 20, novoRec ? '#f2d98a' : '#c3cbe0');
       txt('Quedas: ' + mortes + '   (por fase: ' + mortesFase.join(' · ') + ')', W/2, 408, 16, '#9aa4c4');
       piscar((toque ? 'Toque' : 'Clique') + ' para jogar de novo', 470);
       ctx.globalCompositeOperation = 'lighter';
@@ -719,7 +720,7 @@ function desenhar(){
 /* ---------------------------- Entrada: mouse e teclado ---------------------------- */
 function clique(){   // ação do clique/toque conforme o estado do jogo
   if(estado === 'menu' || estado === 'vitoria') novaPartida();
-  else if(estado === 'morto'){ if(mortoT > .4) iniciarFase(modoTreino ? fase : 1); }
+  else if(estado === 'morto'){ if(mortoT > .4) reiniciarTentativa(); }
   else atirar();
 }
 function posMouse(e){ const r = cv.getBoundingClientRect(); mouse.x = (e.clientX - r.left)*W/r.width; mouse.y = (e.clientY - r.top)*H/r.height; }
@@ -797,13 +798,13 @@ let ultimo = performance.now();
 (function loop(agora){
   const realDt = Math.max(0, (agora - ultimo)/1000);
   const dt = Math.min(.033, realDt); ultimo = agora;
-  if(!pausado && (estado === 'play' || estado === 'morto')) runT += realDt;
+  if(!pausado && !modoTreino && estado === 'play') runT += realDt;
   if(!pausado) update(dt);
   desenhar(); requestAnimationFrame(loop);
 })(ultimo);
 </script>
-<script src="mobile.js?v=3"></script>
+<script src="mobile.js?v=4"></script>
 <script src="ranking-config.js?v=4"></script>
-<script src="ranking.js?v=5"></script>
+<script src="ranking.js?v=7"></script>
 </body>
 </html>

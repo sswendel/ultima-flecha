@@ -73,8 +73,8 @@
   baseDraw();
   const active=toque && estado!=='menu';panel.hidden=!active;top.hidden=!active;
   if(!active)return;
-  const s=[fase,Math.floor(runT*1000),pausado,estado,arrow.estado].join('|');
-  if(s!==signature){signature=s;document.getElementById('mobile-status').textContent=`Fase ${fase}/${FASES} · ${fmt(runT)}${modoTreino?' · treino':''}`;document.getElementById('mobile-pause').textContent=pausado?'Continuar':'Pausar';shot.textContent=arrow.estado==='mao'?'ATIRAR':'SEM FLECHA';}
+  const s=[fase,Math.floor(runT*1000),pausado,estado,arrow.estado,modoTreino].join('|');
+  if(s!==signature){signature=s;document.getElementById('mobile-status').textContent=`Fase ${fase}/${FASES} · ${modoTreino?'TREINO · sem cronômetro':fmt(runT)}`;document.getElementById('mobile-pause').textContent=pausado?'Continuar':'Pausar';shot.textContent=arrow.estado==='mao'?'ATIRAR':'SEM FLECHA';}
   dash.classList.toggle('cooling',player.dashCd>0);
  };
 })();

@@ -26,14 +26,17 @@ export default { async fetch(request, env) {
   if(Number(request.headers.get('Content-Length'))>2048)return reply({error:'Pedido muito grande.'},413);
   const raw=await request.text();if(raw.length>2048)return reply({error:'Pedido muito grande.'},413);
   let body;try{body=JSON.parse(raw);}catch{return reply({error:'Pedido inválido.'},400);}
-  if(path==='/start')return reply({ticket:await sign({id:crypto.randomUUID(),start:Date.now()},env.SESSION_SECRET)});
+  if(path==='/start'){
+   if(body.mode!=='normal')return reply({error:'Somente partidas normais podem participar do ranking.'},400);
+   return reply({ticket:await sign({id:crypto.randomUUID(),start:Date.now(),mode:'normal',rules:2},env.SESSION_SECRET)});
+  }
   if(path!=='/finish')return reply({error:'Rota não encontrada.'},404);
   const ticket=await verify(String(body.ticket||''),env.SESSION_SECRET);
   const elapsed=ticket?(Date.now()-ticket.start):0;
-  if(!ticket || elapsed<12000 || elapsed>86400000 || !Number.isInteger(body.ms) || body.ms<12000 || body.ms>elapsed+1000 || body.mode!=='normal')return reply({error:'Partida inválida ou expirada.'},400);
+  if(!ticket || ticket.mode!=='normal' || ticket.rules!==2 || elapsed<12000 || elapsed>86400000 || !Number.isInteger(body.ms) || body.ms<12000 || body.ms>elapsed+1000 || body.mode!=='normal')return reply({error:'Partida inválida ou expirada.'},400);
   const name=String(body.name||'').normalize('NFC').trim().replace(/\s+/g,' ');
   if(!/^[\p{L}\p{N} ._-]{1,24}$/u.test(name))return reply({error:'Use de 1 a 24 letras, números, espaços, ponto, hífen ou sublinhado.'},400);
-  const entry={id:ticket.id,name,ms:body.ms,date:new Date().toISOString(),device:body.device==='touch'?'touch':'desktop'};
+  const entry={id:ticket.id,name,ms:body.ms,date:new Date().toISOString(),device:body.device==='touch'?'touch':'desktop',mode:'normal',rules:2};
   // SHA evita sobrescrever um recorde simultâneo; conflitos relêem o arquivo.
   for(let retry=0;retry<4;retry++){
    const {sha,data}=await read();
