@@ -538,25 +538,43 @@ function desenharToque(){   // joystick e botões (celular)
 
 function desenharMenu(){
   const clq = toque ? 'Toque' : 'Clique';
-  desenharPiso(); overlay('rgba(5,6,10,.82)'); desenharPoeira(); desenharEclipse(W/2, 30, 38);
-  txt('A ÚLTIMA FLECHA', W/2, 104, 46, '#f2d98a', 'center', true);
-  txt('O despertar do Colosso de Pedra', W/2, 136, 18, '#9aa4c4');
-  linhas(['Sob o Observatório esquecido, um colosso de pedra dorme.',
-          'A cada eclipse ele desperta, e o vale inteiro escurece.',
-          'Você carrega uma única flecha — é tudo o que resta de esperança.',
-          'Derrube o núcleo do Colosso cinco vezes. A cada queda, ele se reergue mais furioso.'], 186, 26, 17);
-  txt('COMO JOGAR', W/2, 316, 18, '#5ff2ff', 'center', true);
-  linhas(['WASD / Setas: mover      Mouse: mirar      Clique: atirar a flecha',
-          'Segure Espaço ou botão direito: chamar a flecha de volta (você fica lento)',
-          'Shift: disparada rápida      R: recomeçar      P: pausar      M: som      F: tela cheia',
-          'Só o núcleo brilhante é vulnerável. Se ele piscar, está prestes a abrir.',
-          'Celular: joystick à esquerda · toque à direita para atirar · botões DASH e FLECHA',
-          'T: modo treino (cair não volta à fase 1) [' + (modoTreino ? 'ligado' : 'desligado') + ']      K: reduzir tremor e flash [' + (reduzir ? 'ligado' : 'desligado') + ']'], 346, 24, 16, '#c3cbe0');
-  if(melhor !== null) txt('Seu recorde: ' + fmt(melhor), W/2, 506, 15, '#f2d98a');
-  piscar(clq + ' para começar', 548);
+  desenharPiso();
+  overlay('rgba(2,3,8,.90)');
+  desenharPoeira();
+
+  // Moldura discreta e painel central para dar à entrada um tom mais sombrio.
+  ctx.fillStyle = 'rgba(4,7,15,.72)';
+  ctx.fillRect(58, 24, W-116, H-48);
+  ctx.strokeStyle = 'rgba(190,151,91,.30)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(58.5, 24.5, W-117, H-49);
+  ctx.strokeStyle = 'rgba(95,242,255,.16)';
+  ctx.beginPath(); ctx.moveTo(112, 326); ctx.lineTo(W-112, 326); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(112, 190); ctx.lineTo(W-112, 190); ctx.stroke();
+
+  desenharEclipse(W/2, 77, 54);
+  // Arcos finos como marca do Observatório.
+  ctx.strokeStyle = 'rgba(207,177,119,.28)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(W/2, 77, 68, Math.PI*1.08, Math.PI*1.92); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2, 77, 76, Math.PI*1.13, Math.PI*1.87); ctx.stroke();
+
+  txt('A ÚLTIMA FLECHA', W/2, 151, 43, '#d9bd7c', 'center', true);
+  txt('O DESPERTAR DO COLOSSO DE PEDRA', W/2, 178, 14, '#8b91a5', 'center', true);
+  linhas(['Sob o Observatório esquecido, a pedra desperta a cada eclipse.',
+          'O Colosso apaga o vale. Você tem uma flecha para romper seu núcleo.',
+          'Acerte-o cinco vezes. Cada queda revela uma forma mais furiosa.'], 220, 25, 17, '#b2b8c9');
+
+  txt('COMO JOGAR', W/2, 357, 17, '#66dce7', 'center', true);
+  linhas(['WASD / Setas: mover     Mouse: mirar     Clique: atirar a flecha',
+          'Espaço ou botão direito: chamar a flecha de volta (você fica lento)',
+          'Shift: dash     R: recomeçar     P: pausar     M: som     F: tela cheia',
+          'Só o núcleo ciano aberto recebe dano; o brilho avisa quando vai abrir.',
+          'Celular: joystick à esquerda; controles de ação à direita.',
+          'T: modo treino [' + (modoTreino ? 'ligado' : 'desligado') + ']     K: reduzir tremor e flash [' + (reduzir ? 'ligado' : 'desligado') + ']'], 388, 23, 15, '#c0c6d5');
+  if(melhor !== null) txt('RECORDE  ' + fmt(melhor), W/2, 535, 14, '#b9a16d');
+  piscar(clq + ' para começar', 565);
   ctx.drawImage(vig, 0, 0);
 }
-
 function desenhar(){
   ctx.save();
   if(shake > 0 && !reduzir) ctx.translate((Math.random()-.5)*shake, (Math.random()-.5)*shake);
