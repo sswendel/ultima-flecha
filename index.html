@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>A Última Flecha</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
@@ -63,6 +63,7 @@ body.em-menu #c{visibility:hidden}
 @media(max-width:700px) and (min-height:601px){.entrada-cena{top:9vh;width:max(100vw,100vh);height:max(62.5vw,62.5vh);transform:translateX(-50%);mask-image:linear-gradient(#000 0%,#000 82%,transparent 100%)}}
 
 </style>
+<link rel="stylesheet" href="mobile.css?v=2">
 </head>
 <body class="em-menu">
 
@@ -89,7 +90,7 @@ body.em-menu #c{visibility:hidden}
 <dt>M / F</dt><dd>Som / tela cheia</dd>
 </dl>
 <p class="entrada-dica">Só o <strong>núcleo ciano aberto</strong> recebe dano. O brilho avisa quando ele vai abrir.</p>
-<p class="entrada-dica">Celular: joystick à esquerda. Toque à direita para mirar e atirar. Use os botões de dash e de retorno da flecha.</p></aside>
+<p class="entrada-dica">Celular: joystick à esquerda. Use o controle à esquerda para mover e ATIRAR para mirar no núcleo. Ou arraste na arena e solte para atirar. Segure PUXAR para recuperar a flecha.</p></aside>
  <div class="entrada-acoes"><div class="entrada-botoes"><button class="entrada-iniciar" id="entrada-iniciar" type="button">Despertar o Colosso</button>
   <button class="entrada-ajuda-botao" id="entrada-ajuda" type="button">Como jogar</button></div>
   <div class="entrada-opcoes"><button class="entrada-opcao" id="entrada-treino" type="button" aria-pressed="false">T · Modo treino: desligado</button>
@@ -106,10 +107,16 @@ body.em-menu #c{visibility:hidden}
 <dt>M / F</dt><dd>Som / tela cheia</dd>
 </dl>
 <p class="entrada-dica">Só o <strong>núcleo ciano aberto</strong> recebe dano. O brilho avisa quando ele vai abrir.</p>
-<p class="entrada-dica">Celular: joystick à esquerda. Toque à direita para mirar e atirar. Use os botões de dash e de retorno da flecha.</p>
+<p class="entrada-dica">Celular: joystick à esquerda. Use o controle à esquerda para mover e ATIRAR para mirar no núcleo. Ou arraste na arena e solte para atirar. Segure PUXAR para recuperar a flecha.</p>
 <p class="entrada-dica">T: modo treino, para recomeçar na fase em que caiu.<br>K: reduzir tremor, flash e a pulsação da entrada.</p>
 <button id="entrada-fechar-ajuda" type="button">Voltar à entrada</button></dialog>
 
+<div id="mobile-top" hidden><span id="mobile-status" aria-live="polite"></span><button id="mobile-pause" type="button" aria-label="Pausar ou continuar">Pausar</button></div>
+<div id="mobile-controls" hidden aria-label="Controles de toque">
+ <div id="mobile-joy" role="group" aria-label="Arraste para mover"><span id="mobile-stick"></span><small>MOVER</small></div>
+ <div class="mobile-actions"><button id="mobile-dash" type="button">DASH</button><button id="mobile-shot" type="button">ATIRAR</button><button id="mobile-recall" type="button">SEGURE<br>PARA PUXAR</button></div>
+ <p id="mobile-tip">Mira assistida no núcleo · ou arraste na arena e solte para atirar</p>
+</div>
 <canvas aria-label="Arena do jogo A Última Flecha" id="c" width="960" height="600"></canvas>
 <script>
 /* =====================================================================
@@ -184,12 +191,12 @@ let player, arrow, boss, projs = [], parts = [], fila = [], ondas = [];
 let pausado = false, parada = 0, zoom = 0, zc = {x: 0, y: 0}, fade = 0, bannerT = 0, shake = 0, flash = 0, limpaT = 0, mortoT = 0, tempo = 0, somLigado = true, ac = null;
 let modoTreino = false, reduzir = false, toque = false, runT = 0, melhor = null, novoRec = false, musT = 0, musN = 0;
 const keys = {}, mouse = {x: W/2, y: H/2, right: false};
-try{ melhor = parseFloat(localStorage.getItem('ultimaFlechaRecorde')) || null; }catch(_){}
+try{ melhor = parseFloat(localStorage.getItem('ultimaFlechaRecordeV2')) || null; }catch(_){}
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const mod = (v, m) => ((v % m) + m) % m;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-const fmt = s => Math.floor(s/60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const fmt = s => { const ms = Math.max(0, Math.round(s*1000)); return String(Math.floor(ms/60000)).padStart(2, '0') + ':' + String(Math.floor(ms/1000)%60).padStart(2, '0') + '.' + String(ms%1000).padStart(3, '0'); };
 const coreXY = () => ({x: boss.x + Math.cos(boss.ang)*boss.r*.72, y: boss.y + Math.sin(boss.ang)*boss.r*.72});
 
 function iniciarAudio(){ if(!ac){ try{ ac = new (window.AudioContext || window.webkitAudioContext)(); }catch(_){} } }
@@ -271,7 +278,8 @@ function updJogador(dt){
   const p = player, jm = Math.hypot(joy.x, joy.y) > .2;             // joystick virtual (celular)
   let ix = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0) + (jm ? joy.x : 0);
   let iy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0) + (jm ? joy.y : 0);
-  const l = Math.hypot(ix, iy); if(l){ ix /= l; iy /= l; }
+  let l = Math.hypot(ix, iy); if(l){ ix /= l; iy /= l; }
+  if(toque && keys.shift && !l){const d = Math.hypot(p.x-boss.x,p.y-boss.y)||1;ix=(p.x-boss.x)/d;iy=(p.y-boss.y)/d;l=1;}
   let sp = (mouse.right || keys[' ']) && arrow.estado !== 'mao' ? 40 : 170;   // lento ao chamar a flecha
   p.dashCd -= dt;
   if(p.dashT <= 0 && keys.shift && p.dashCd <= 0 && l){
@@ -286,7 +294,7 @@ function updJogador(dt){
 }
 
 function atirar(){
-  if(estado !== 'play' || arrow.estado !== 'mao') return;
+  if(estado !== 'play' || pausado || arrow.estado !== 'mao') return;
   let dx = mouse.x - player.x, dy = mouse.y - player.y, d = Math.hypot(dx, dy);
   if(d < 1){ dx = 0; dy = -1; d = 1; }
   arrow = {x: player.x, y: player.y, ux: dx/d, uy: dy/d, speed: 900, estado: 'voo', ang: Math.atan2(dy, dx)};
@@ -362,7 +370,7 @@ function update(dt){
   parts = parts.filter(p => { p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= .96; p.vy *= .96; return (p.life -= dt) > 0; });
   ondas = ondas.filter(o => (o.t += dt) < o.max);
   if(estado === 'play'){
-    runT += dt; musica(dt);
+    musica(dt);
     updJogador(dt); updFlecha(dt);
     if(estado !== 'play') return;
     updBoss(dt); updFila(dt);
@@ -374,7 +382,7 @@ function update(dt){
     if(limpaT > 2.2){
       estado = 'vitoria'; beep(523, .2, 'triangle', .1); setTimeout(() => beep(784, .4, 'triangle', .1), 200);
       novoRec = false;
-      if(!modoTreino && (melhor === null || runT < melhor)){ melhor = runT; novoRec = true; try{ localStorage.setItem('ultimaFlechaRecorde', melhor); }catch(_){} }
+      if(!modoTreino && (melhor === null || runT < melhor)){ melhor = runT; novoRec = true; try{ localStorage.setItem('ultimaFlechaRecordeV2', melhor); }catch(_){} }
     }
   } else if(estado === 'morto') mortoT += dt;
   else if(estado === 'vitoria' && Math.random() < .5)   // faíscas douradas subindo
@@ -467,7 +475,7 @@ function desenharPiso(){
 
 function desenharPoeira(){
   ctx.globalCompositeOperation = 'lighter';
-  for(let i = 0; i < 46; i++){
+  for(let i = 0; i < (toque ? 18 : 46); i++){
     const x = L + mod(i*137.5 + tempo*(5 + i%5*3), R-L), y = T + mod(i*91.3 - tempo*(7 + i%4*4), B-T), a = .12 + .1*Math.sin(tempo*1.5 + i);
     ctx.fillStyle = i % 3 ? 'rgba(150,200,255,' + a + ')' : 'rgba(255,200,120,' + a + ')'; ctx.fillRect(x, y, 1.8, 1.8);
   }
@@ -615,23 +623,11 @@ function desenharHUD(){
   ctx.fillStyle = 'rgba(20,24,38,.9)'; ctx.fillRect(W-136, H-24, 80, 8);
   ctx.fillStyle = pr >= 1 ? '#5ff2ff' : '#6d7694'; ctx.fillRect(W-136, H-24, 80*pr, 8);
   ctx.strokeStyle = 'rgba(160,180,240,.35)'; ctx.lineWidth = 1; ctx.strokeRect(W-136, H-24, 80, 8);
-  txt('Dash (Shift)', W-146, H-14, 14, '#9aa4c4', 'right');
+  txt(toque ? 'Dash' : 'Dash (Shift)', W-146, H-14, 14, '#9aa4c4', 'right');
   txt(somLigado ? 'M: som ligado' : 'M: som mudo', W-56, 28, 14, '#8a93b3', 'right');
-  const st = {mao: 'Flecha: na mão', voo: 'Flecha: voando', chao: 'Flecha: no chão — pegue ou segure Espaço', volta: 'Flecha: voltando…'}[arrow.estado];
+  const st = {mao: 'Flecha: na mão', voo: 'Flecha: voando', chao: toque ? 'Flecha no chão — segure PUXAR' : 'Flecha: no chão — pegue ou segure Espaço', volta: 'Flecha: voltando…'}[arrow.estado];
   txt(st, 56, H-14, 15, arrow.estado === 'mao' ? '#f2d98a' : '#ff9b7a', 'left');
-  if(fase === 1 && estado === 'play') txt('Só o núcleo brilhante (ciano) pode ser ferido. Quando ele piscar, está para abrir!', W/2, H-14, 15, '#c3cbe0');
-}
-
-function desenharToque(){   // joystick e botões (celular)
-  const jx = joy.id !== null ? joy.ox : 110, jy = joy.id !== null ? joy.oy : H-110, prd = clamp(1 - player.dashCd/.7, 0, 1);
-  ctx.lineWidth = 2; circ(jx, jy, 50, 'rgba(255,255,255,.05)', 'rgba(255,255,255,.25)');
-  circ(jx + joy.x*40, jy + joy.y*40, 22, 'rgba(255,255,255,.22)', 'rgba(255,255,255,.5)');
-  [['dash', 'DASH'], ['volta', 'FLECHA'], ['pausa', 'II']].forEach(([k, nome]) => {
-    const b = BTN[k], ativo = Object.values(botoes).includes(k);
-    ctx.lineWidth = 2; circ(b.x, b.y, b.r, ativo ? 'rgba(95,242,255,.3)' : 'rgba(255,255,255,.08)', 'rgba(255,255,255,.35)');
-    txt(nome, b.x, b.y + 5, 13, '#dfe6f3');
-    if(k === 'dash'){ ctx.lineWidth = 3; ctx.strokeStyle = '#5ff2ff'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4, -Math.PI/2, -Math.PI/2 + 6.283*prd); ctx.stroke(); }
-  });
+  if(!toque && fase === 1 && estado === 'play') txt('Só o núcleo brilhante (ciano) pode ser ferido. Quando ele piscar, está para abrir!', W/2, H-14, 15, '#c3cbe0');
 }
 
 function desenharMenu(){
@@ -686,7 +682,7 @@ function desenhar(){
       txt('Fase ' + fase + '/' + FASES, W/2, 92, 28, '#5ff2ff', 'center', true); txt(FRASES[fase-1], W/2, 122, 18, '#dfe6f3');
       ctx.globalAlpha = 1;
     }
-    if(toque && estado === 'play') desenharToque();
+
     if(estado === 'limpa'){ overlay('rgba(0,0,0,' + clamp(limpaT*.25, 0, .5) + ')'); txt('O Colosso desaba!', W/2, H/2, 38, '#5ff2ff', 'center', true); }
     if(estado === 'morto'){
       overlay('rgba(60,0,0,.5)'); txt('Você caiu', W/2, H/2-10, 40, '#ff7a7a', 'center', true);
@@ -725,6 +721,7 @@ function posMouse(e){ const r = cv.getBoundingClientRect(); mouse.x = (e.clientX
 cv.addEventListener('mousemove', posMouse);
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('mousedown', e => {
+  if(toque) return;
   posMouse(e); iniciarAudio();
   if(pausado){ pausado = false; return; }
   if(e.button === 2){ mouse.right = true; return; }
@@ -747,45 +744,7 @@ addEventListener('blur', () => { for(const k in keys) keys[k] = false; mouse.rig
 
 /* ---------------------------- Entrada: celular (toque) ---------------------------- */
 const joy = {id: null, ox: 0, oy: 0, x: 0, y: 0}, botoes = {};
-const BTN = {dash: {x: W-80, y: H-130, r: 38}, volta: {x: W-170, y: H-80, r: 38}, pausa: {x: W-40, y: 78, r: 22}};
-const ptToque = t => { const r = cv.getBoundingClientRect(); return {x: (t.clientX - r.left)*W/r.width, y: (t.clientY - r.top)*H/r.height}; };
-cv.addEventListener('touchstart', e => {
-  e.preventDefault(); toque = true; iniciarAudio();
-  for(const t of e.changedTouches){
-    const p = ptToque(t);
-    if(pausado){ pausado = false; continue; }
-    if(estado !== 'play'){ clique(); continue; }
-    const nome = Object.keys(BTN).find(k => dist(p, BTN[k]) < BTN[k].r + 10);
-    if(nome){
-      botoes[t.identifier] = nome;
-      if(nome === 'dash') keys.shift = true; else if(nome === 'volta') mouse.right = true; else pausado = true;
-    } else if(p.x < W*.4 && joy.id === null) Object.assign(joy, {id: t.identifier, ox: p.x, oy: p.y, x: 0, y: 0});
-    else { mouse.x = p.x; mouse.y = p.y; atirar(); }
-  }
-}, {passive: false});
-cv.addEventListener('touchmove', e => {
-  e.preventDefault();
-  for(const t of e.changedTouches){
-    const p = ptToque(t);
-    if(t.identifier === joy.id){
-      const dx = p.x - joy.ox, dy = p.y - joy.oy, d = Math.hypot(dx, dy), k = Math.min(d, 50)/50;
-      joy.x = d ? dx/d*k : 0; joy.y = d ? dy/d*k : 0;
-    } else if(!botoes[t.identifier]){ mouse.x = p.x; mouse.y = p.y; }
-  }
-}, {passive: false});
-const fimToque = e => {
-  e.preventDefault();
-  for(const t of e.changedTouches){
-    if(t.identifier === joy.id){ joy.id = null; joy.x = joy.y = 0; }
-    const n = botoes[t.identifier]; delete botoes[t.identifier];
-    if(n === 'dash') keys.shift = false;
-    if(n === 'volta') mouse.right = false;
-  }
-};
-cv.addEventListener('touchend', fimToque, {passive: false});
-cv.addEventListener('touchcancel', fimToque, {passive: false});
-
-
+// Os controles de toque são elementos HTML em mobile.js, com tamanho independente da arena.
 /* A entrada usa o mesmo estado e as mesmas opções da partida 2D. */
 const entradaEl = document.getElementById('entrada');
 const treinoEl = document.getElementById('entrada-treino');
@@ -831,10 +790,15 @@ addEventListener('keydown', e => {
 iniciarFase(1); estado = 'menu'; fade = 0; bannerT = 0;
 let ultimo = performance.now();
 (function loop(agora){
-  const dt = Math.min(.033, (agora - ultimo)/1000); ultimo = agora;
+  const realDt = Math.max(0, (agora - ultimo)/1000);
+  const dt = Math.min(.033, realDt); ultimo = agora;
+  if(!pausado && (estado === 'play' || estado === 'morto')) runT += realDt;
   if(!pausado) update(dt);
   desenhar(); requestAnimationFrame(loop);
 })(ultimo);
 </script>
+<script src="mobile.js?v=2"></script>
+<script src="ranking-config.js?v=2"></script>
+<script src="ranking.js?v=2"></script>
 </body>
 </html>

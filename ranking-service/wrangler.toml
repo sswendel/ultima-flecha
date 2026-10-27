@@ -1,0 +1,8 @@
+name = "ultima-flecha-ranking"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+[vars]
+ALLOWED_ORIGIN = "https://sswendel.github.io"
+GITHUB_REPO = "sswendel/ultima-flecha"
+GITHUB_BRANCH = "main"
+GITHUB_PATH = "ranking.json"

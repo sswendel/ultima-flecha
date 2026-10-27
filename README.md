@@ -56,3 +56,17 @@ Assim, cada nova fase apresenta termos seguintes das sequências e exige que o j
 ## Tecnologias
 
 HTML5 Canvas, CSS e JavaScript. Não requer instalação de dependências para jogar.
+
+## Celular (versão 2)
+
+Controles de toque em tamanho fixo fora da arena, em retrato e paisagem. Arraste o joystick para mover, use DASH para desviar, ATIRAR para mirar no núcleo automaticamente ou arraste e solte na arena para mirar manualmente. Segure PUXAR para recuperar a flecha. Os controles aceitam dedos simultâneos e cancelam comandos ao perder foco. Para aproveitar melhor a arena, jogue com o celular deitado.
+
+O jogo pausa ao trocar de aplicativo ou girar a tela. O cronômetro usa tempo real em vez da duração limitada dos quadros, incluindo o intervalo de espera após cair. Recordes locais antigos são separados dos atuais por essa mudança de medição.
+
+## Ranking global
+
+A integração com top 10 está preparada para gravar em `ranking.json` no GitHub, sem banco de dados. **Ainda precisa conectar o intermediário de gravação para ativar o ranking global.** Leia [ranking-service/README.md](ranking-service/README.md). Sem configuração, o jogo funciona normalmente e não exibe o botão de ranking.
+
+## Verificação
+
+`node tests/mobile.mjs` verifica lógica de controles, pausa e cronômetro com elementos simulados. `node tests/ranking.mjs` verifica regras do ranking e conflitos de gravação com uma API simulada. Esses testes não substituem a avaliação dos controles em um aparelho físico.
