@@ -1,15 +1,5 @@
 {
   "version": 1,
-  "entries": [
-    {
-      "id": "5b9f5b5c-9040-46e8-be8d-d315f39ed168",
-      "name": "Teste tecnico",
-      "ms": 12001,
-      "date": "2026-10-27T23:48:41.336Z",
-      "device": "desktop"
-    }
-  ],
-  "used": [
-    "5b9f5b5c-9040-46e8-be8d-d315f39ed168"
-  ]
+  "entries": [],
+  "used": []
 }
