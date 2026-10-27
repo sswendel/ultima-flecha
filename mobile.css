@@ -2,7 +2,7 @@
 #mobile-controls,#mobile-top{display:none}
 body.mobile-game{height:100dvh;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none}
 body.mobile-game:not(.em-menu){display:flex;align-items:flex-start;padding-top:calc(env(safe-area-inset-top) + 58px);box-sizing:border-box}
-body.mobile-game:not(.em-menu) #c{width:min(calc(100vw - 12px),calc((100dvh - 250px - env(safe-area-inset-top) - env(safe-area-inset-bottom))*1.6));height:auto;max-height:calc(100dvh - 250px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+body.mobile-game:not(.em-menu) #c{width:min(calc(100vw - 12px),calc((100dvh - 250px - env(safe-area-inset-top) - env(safe-area-inset-bottom))*var(--arena-ratio,1.6)));height:auto;aspect-ratio:var(--arena-ratio,1.6);max-height:calc(100dvh - 250px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
 body.mobile-game #mobile-top:not([hidden]){display:flex;position:fixed;z-index:5;top:env(safe-area-inset-top);left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));height:48px;align-items:center;justify-content:space-between;gap:8px;color:#d6cfb9;font:13px system-ui,sans-serif}
 #mobile-top button{padding:10px 15px;min-height:44px;border:1px solid #627e89;border-radius:12px;background:#101d29;color:#d8eff4;font:14px system-ui;touch-action:none}
 body.mobile-game #mobile-controls:not([hidden]){display:block;position:fixed;inset:0;pointer-events:none;z-index:4}
@@ -18,7 +18,7 @@ body.mobile-game #mobile-controls:not([hidden]){display:block;position:fixed;ins
 #mobile-tip{position:absolute;bottom:calc(5px + env(safe-area-inset-bottom));left:12px;right:12px;text-align:center;color:#9eb1bd;font:11px/1.4 system-ui;margin:0}
 @media (orientation:landscape){
  body.mobile-game:not(.em-menu){align-items:center;padding-top:44px;padding-bottom:8px}
- body.mobile-game:not(.em-menu) #c{width:min(calc(100vw - 240px - env(safe-area-inset-left) - env(safe-area-inset-right)),calc((100dvh - 58px - env(safe-area-inset-top) - env(safe-area-inset-bottom))*1.6));max-height:calc(100dvh - 58px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+ body.mobile-game:not(.em-menu) #c{width:min(calc(100vw - 240px - env(safe-area-inset-left) - env(safe-area-inset-right)),calc((100dvh - 58px - env(safe-area-inset-top) - env(safe-area-inset-bottom))*var(--arena-ratio,1.6)));max-height:calc(100dvh - 58px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
  #mobile-joy{width:100px;height:100px;left:max(9px,env(safe-area-inset-left));bottom:calc(28px + env(safe-area-inset-bottom))}
  #mobile-stick{left:25px;top:25px}
  .mobile-actions{right:max(9px,env(safe-area-inset-right));grid-template-columns:54px 54px;gap:7px;bottom:calc(30px + env(safe-area-inset-bottom))}

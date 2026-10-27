@@ -63,7 +63,7 @@ body.em-menu #c{visibility:hidden}
 @media(max-width:700px) and (min-height:601px){.entrada-cena{top:9vh;width:max(100vw,100vh);height:max(62.5vw,62.5vh);transform:translateX(-50%);mask-image:linear-gradient(#000 0%,#000 82%,transparent 100%)}}
 
 </style>
-<link rel="stylesheet" href="mobile.css?v=2">
+<link rel="stylesheet" href="mobile.css?v=3">
 </head>
 <body class="em-menu">
 
@@ -173,7 +173,7 @@ const configFase = n => ({
 
 /* ---------------------------- Estado ---------------------------- */
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
-const W = 960, H = 600, L = 40, T = 40, R = 920, B = 560;      // arena
+let W = 960, H = 600, L = 40, T = 40, R = 920, B = 560;      // arena
 const CORE_R = 15, TF = 2.8, RING_TIMES = [0.5, 1.7], AVISO = .3;   // AVISO: tempo de aviso antes de cada disparo
 const MAX_PROJ = MAT.somaPA(6, 2, FASES) * 2;                   // teto de projéteis vivos
 const PILARES = [[20, 20], [940, 20], [20, 580], [940, 580]];  // braseiros nos cantos
@@ -391,8 +391,9 @@ function update(dt){
 
 /* ---------------------------- Cenário pré-renderizado ---------------------------- */
 // Piso de pedra (desenhado uma única vez)
-const piso = document.createElement('canvas'); piso.width = W; piso.height = H;
-(function(){
+const piso = document.createElement('canvas');
+function prepararPiso(){
+  piso.width = W; piso.height = H;
   const g = piso.getContext('2d'); let s = 7;
   const rnd = () => (s = s*16807 % 2147483647) / 2147483647;
   g.fillStyle = '#05060b'; g.fillRect(0, 0, W, H);
@@ -432,21 +433,24 @@ const piso = document.createElement('canvas'); piso.width = W; piso.height = H;
     g.fillStyle = gr; g.beginPath(); g.arc(x, y, 18, 0, 7); g.fill(); g.strokeStyle = '#0a0c14'; g.lineWidth = 2; g.stroke();
     g.fillStyle = '#07080d'; g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill();
   });
-})();
+}
+prepararPiso();
 
 // Vinheta escura nas bordas
-const vig = document.createElement('canvas'); vig.width = W; vig.height = H;
-(function(){
+const vig = document.createElement('canvas');
+function prepararVinheta(){
+  vig.width = W; vig.height = H;
   const g = vig.getContext('2d'), r = g.createRadialGradient(W/2, H/2, H*.35, W/2, H/2, W*.62);
   r.addColorStop(0, 'rgba(0,0,0,0)'); r.addColorStop(1, 'rgba(0,0,0,.72)'); g.fillStyle = r; g.fillRect(0, 0, W, H);
-})();
+}
+prepararVinheta();
 
 /* ---------------------------- Desenho ---------------------------- */
 function txt(s, x, y, size = 18, col = '#dfe6f3', al = 'center', bold = false){
   ctx.font = bold ? 'bold ' + size + 'px ' + FONTE : size + 'px system-ui, sans-serif'; ctx.textAlign = al;
-  ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillText(s, x+1, y+2);
+  ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillText(s, x+1, y+2, W-64);
   if(bold){ ctx.shadowColor = col; ctx.shadowBlur = 14; }
-  ctx.fillStyle = col; ctx.fillText(s, x, y); ctx.shadowBlur = 0;
+  ctx.fillStyle = col; ctx.fillText(s, x, y, W-64); ctx.shadowBlur = 0;
 }
 const linhas = (arr, y, dy, size, col) => arr.forEach((l, i) => txt(l, W/2, y + i*dy, size, col));
 const overlay = cor => { ctx.fillStyle = cor; ctx.fillRect(0, 0, W, H); };
@@ -608,6 +612,7 @@ function desenharJogo(){
 }
 
 function desenharHUD(){
+  if(toque) return; // Fase, tempo e ações têm texto HTML legível no celular.
   let g = ctx.createLinearGradient(0, 0, 0, 56); g.addColorStop(0, 'rgba(0,0,0,.65)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 56);
   g = ctx.createLinearGradient(0, H-50, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.65)'); ctx.fillStyle = g; ctx.fillRect(0, H-50, W, 50);
   txt('FASE ' + fase + '/' + FASES, 56, 30, 16, '#c3cbe0', 'left', true);
@@ -797,7 +802,7 @@ let ultimo = performance.now();
   desenhar(); requestAnimationFrame(loop);
 })(ultimo);
 </script>
-<script src="mobile.js?v=2"></script>
+<script src="mobile.js?v=3"></script>
 <script src="ranking-config.js?v=2"></script>
 <script src="ranking.js?v=2"></script>
 </body>

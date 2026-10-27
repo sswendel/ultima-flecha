@@ -6,9 +6,24 @@
  const shot = document.getElementById('mobile-shot'), dash = document.getElementById('mobile-dash'), recall = document.getElementById('mobile-recall');
  let manual = false, aimId = null, padId = null;
  const releases=[];
- const enable = () => {toque = true; document.body.classList.add('mobile-game');};
- if(coarse.matches || navigator.maxTouchPoints > 0 || innerWidth <= 900) enable();
+ const enable = () => {toque = true; document.body.classList.add('mobile-game'); resizeArena();};
+
  document.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')enable();},{passive:true});
+ function resizeArena(){
+  if(!toque)return;
+  const portrait=innerHeight>innerWidth, nw=portrait?600:960, nh=portrait?850:600;
+  if(W===nw && H===nh)return;
+  const old={w:W,h:H,l:L,t:T,r:R,b:B};
+  W=nw;H=nh;R=W-40;B=H-40;cv.width=W;cv.height=H;
+  document.documentElement.style.setProperty('--arena-ratio',String(W/H));
+  PILARES.splice(0,PILARES.length,[20,20],[W-20,20],[20,H-20],[W-20,H-20]);
+  const reposition=p=>{if(p){p.x=L+(p.x-old.l)*(R-L)/(old.r-old.l);p.y=T+(p.y-old.t)*(B-T)/(old.b-old.t);}};
+  reposition(player);reposition(arrow);reposition(boss);projs.forEach(reposition);
+  if(player){player.x=clamp(player.x,L+10,R-10);player.y=clamp(player.y,T+10,B-10);player.tr=[];}
+  if(boss){boss.x=clamp(boss.x,L+boss.r,R-boss.r);boss.y=clamp(boss.y,T+boss.r,B-boss.r);}
+  parts=[];ondas=[];prepararPiso();prepararVinheta();
+  reset();if(estado==='play')pausado=true;
+ }
  function reset(){
   releases.forEach(fn=>fn());
   joy.id=null;joy.x=joy.y=0;padId=aimId=null;manual=false;keys.shift=false;mouse.right=false;
@@ -48,6 +63,8 @@
  function suspend(){reset();if(estado==='play')pausado=true;}
  addEventListener('blur',suspend);document.addEventListener('visibilitychange',()=>{if(document.hidden)suspend();});
  addEventListener('orientationchange',suspend);
+ addEventListener('resize',()=>{if(toque)resizeArena();});
+ if(coarse.matches || navigator.maxTouchPoints > 0 || innerWidth <= 900) enable();
  const baseUpdate=update;
  update=function(dt){if(toque)aim();baseUpdate(dt);};
  const baseDraw=desenhar;
