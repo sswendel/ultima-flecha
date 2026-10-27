@@ -65,7 +65,7 @@ O jogo pausa ao trocar de aplicativo ou girar a tela. O cronômetro usa tempo re
 
 ## Ranking global
 
-A integração com top 10 está preparada para gravar em `ranking.json` no GitHub, sem banco de dados. **Ainda precisa conectar o intermediário de gravação para ativar o ranking global.** Leia [ranking-service/README.md](ranking-service/README.md). Sem configuração, o jogo funciona normalmente e não exibe o botão de ranking.
+O top 10 global está ativo e grava em `ranking.json` no GitHub, sem banco de dados. O serviço de gravação é `https://ultima-flecha-ranking.wendel-dak.workers.dev`, publicado exclusivamente na conta Cloudflare pessoal. Quem termina as cinco fases entre os dez menores tempos pode informar um apelido. Tempos são ordenados em milissegundos. Consulte [ranking-service/README.md](ranking-service/README.md) para manutenção.
 
 ## Verificação
 

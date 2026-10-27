@@ -1,4 +1,5 @@
 name = "ultima-flecha-ranking"
+account_id = "967593ac0c05e0887ce9b8dc51f6aa1d"
 main = "worker.mjs"
 compatibility_date = "2026-10-01"
 [vars]
