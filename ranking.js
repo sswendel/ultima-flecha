@@ -2,7 +2,7 @@
  const api=String(window.RANKING_API||'').replace(/\/$/,'');
  if(!/^https:\/\//.test(api))return; // Só anuncia o ranking quando o serviço estiver conectado.
  const menuButton=document.createElement('button');menuButton.type='button';menuButton.textContent='Top 10 · melhores tempos';menuButton.className='entrada-opcao';
- document.querySelector('.entrada-opcoes').append(menuButton);
+ document.querySelector('.entrada-botoes').append(menuButton);
  const dialog=document.createElement('dialog');dialog.className='ajuda-modal ranking-modal';
  dialog.innerHTML='<h2>TOP 10 DO ECLIPSE</h2><p id="rank-status" role="status"></p><ol id="rank-list"></ol><form id="rank-form" hidden><label for="rank-name">Seu tempo entrou no top 10! Como quer aparecer?</label><input id="rank-name" name="name" maxlength="24" autocomplete="nickname" required placeholder="Seu nome ou apelido"><p>Seu apelido e tempo ficarão públicos.</p><button type="submit">Salvar meu tempo</button></form><button id="rank-close" type="button">Fechar</button>';
  document.body.append(dialog);
