@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>A Última Flecha</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#05060b;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  canvas{width:min(100vw,calc(100vh*1.6));height:auto;aspect-ratio:960/600;cursor:crosshair;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="600"></canvas>
+<script>
+/* =====================================================================
+   A ÚLTIMA FLECHA  —  jogo estilo Titan Souls (uma flecha, um golpe)
+   Projeto Aplicado — conteúdo: Sequências numéricas (PA e PG)
+
+   A matemática vive SÓ no código (nada de quiz / perguntas no jogo).
+   Cada fase n = 1..5 é um termo das sequências abaixo:
+
+   PA  (Progressão Aritmética):   a_n = a_1 + (n-1)·r
+       -> nº de projéteis do anel do Colosso:  a_1 = 6, r = 2
+          fases 1..5  ->  6, 8, 10, 12, 14
+       -> Soma dos n primeiros termos:  S_n = n·(a_1 + a_n)/2
+          S_5 = 5·(6+14)/2 = 50  (total de projéteis por rodada de anéis)
+
+   PG  (Progressão Geométrica):   a_n = a_1 · q^(n-1)
+       -> velocidade dos projéteis:  a_1 = 130 px/s, q = 1,15   (cresce)
+       -> janela em que o núcleo fica aberto: a_1 = 3,2 s, q = 0,85 (diminui)
+       -> velocidade de perseguição do Colosso: a_1 = 40 px/s, q = 1,25
+       -> velocidade de giro do núcleo: a_1 = 0,9 rad/s, q = 1,3
+       -> velocidade da investida do Colosso: a_1 = 320 px/s, q = 1,1
+       -> espiral (fase >= 3): a_n projéteis, um a cada 2π/a_n rad
+
+   Geometria do anel (divisão do círculo em a_n partes iguais):
+       ângulo entre projéteis = 2π / a_n
+   ===================================================================== */
+
+const MAT = {
+  termoPA: (a1, r, n) => a1 + (n - 1) * r,
+  somaPA:  (a1, r, n) => n * (a1 + MAT.termoPA(a1, r, n)) / 2,
+  termoPG: (a1, q, n) => a1 * q ** (n - 1),
+  somaPG:  (a1, q, n) => a1 * (q ** n - 1) / (q - 1)
+};
+
+const FASES = 5;
+const configFase = n => ({
+  aneis:   MAT.termoPA(6, 2, n),        // PA: projéteis por anel
+  velProj: MAT.termoPG(130, 1.15, n),   // PG: velocidade dos projéteis
+  janela:  MAT.termoPG(3.2, 0.85, n),   // PG: tempo com núcleo aberto
+  velBoss: MAT.termoPG(40, 1.25, n),    // PG: velocidade do Colosso
+  velRot:  MAT.termoPG(0.9, 1.3, n),    // PG: giro do núcleo (rad/s)
+  velDash: MAT.termoPG(320, 1.1, n)     // PG: velocidade da investida
+});
+
+// Gabarito: confere as contas ao carregar (veja o console do navegador)
+[
+  ['PA a_5 = 14',            MAT.termoPA(6,2,5) === 14],
+  ['PA S_5 = 50',            MAT.somaPA(6,2,5) === 50],
+  ['PA fases 6,8,10,12,14',  [1,2,3,4,5].map(n => MAT.termoPA(6,2,n)).join() === '6,8,10,12,14'],
+  ['PG a_3 = 130·1,15²',     Math.abs(MAT.termoPG(130,1.15,3) - 130*1.15*1.15) < 1e-6],
+  ['PG janela a_5 ≈ 1,6704', Math.abs(MAT.termoPG(3.2,.85,5) - 1.6704) < 1e-3],
+  ['PG S_3 (q=2,a1=1) = 7',  Math.abs(MAT.somaPG(1,2,3) - 7) < 1e-6]
+].forEach(([nome, ok]) => console.log((ok ? '✔ ' : '✘ ') + nome));
+
+/* ---------------------------- Estado ---------------------------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const W = 960, H = 600, L = 40, T = 40, R = 920, B = 560;      // arena
+const CORE_R = 15, TF = 2.8, RING_TIMES = [0.5, 1.7], AVISO = .3;   // AVISO: tempo de aviso antes de cada disparo
+const MAX_PROJ = MAT.somaPA(6, 2, FASES) * 2;                   // teto de projéteis vivos
+const PILARES = [[20, 20], [940, 20], [20, 580], [940, 580]];  // braseiros nos cantos
+const FONTE = "'Cinzel', Georgia, serif";
+const FRASES = [                                                 // enredo: uma frase por fase
+  'O Colosso desperta. Espere o núcleo brilhar.',
+  'A pedra racha, e ele ganha velocidade.',
+  'Surge a espiral — desvie do giro das chamas!',
+  'Ele investe contra você — fuja do corredor vermelho!',
+  'A fúria final: duas investidas por ciclo!'
+];
+
+let estado = 'menu', fase = 1, cfg = configFase(1), mortes = 0, mortesFase = [0, 0, 0, 0, 0];
+let player, arrow, boss, projs = [], parts = [], fila = [], ondas = [];
+let pausado = false, parada = 0, zoom = 0, zc = {x: 0, y: 0}, fade = 0, bannerT = 0, shake = 0, flash = 0, limpaT = 0, mortoT = 0, tempo = 0, somLigado = true, ac = null;
+let modoTreino = false, reduzir = false, toque = false, runT = 0, melhor = null, novoRec = false, musT = 0, musN = 0;
+const keys = {}, mouse = {x: W/2, y: H/2, right: false};
+try{ melhor = parseFloat(localStorage.getItem('ultimaFlechaRecorde')) || null; }catch(_){}
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const mod = (v, m) => ((v % m) + m) % m;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const fmt = s => Math.floor(s/60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const coreXY = () => ({x: boss.x + Math.cos(boss.ang)*boss.r*.72, y: boss.y + Math.sin(boss.ang)*boss.r*.72});
+
+function iniciarAudio(){ if(!ac){ try{ ac = new (window.AudioContext || window.webkitAudioContext)(); }catch(_){} } }
+function beep(f, d, type = 'square', vol = .07, slide = 0){
+  if(!ac || !somLigado) return;
+  const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d);
+}
+
+// Música procedural: baixo + brilho numa escala pentatônica menor, mais rápida a cada fase
+function musica(dt){
+  if(!ac || !somLigado || estado !== 'play') return;
+  const passo = 60 / (70 + fase*10) / 2;                          // colcheia
+  if((musT -= dt) > 0) return;
+  musT += passo;
+  const esc = [0, 3, 5, 7, 10, 12], nota = 55 * 2 ** ((esc[musN % 6] - (musN % 16 < 8 ? 0 : 2)) / 12);
+  if(musN % 2 === 0) beep(nota, passo*1.8, 'triangle', .035);
+  if(musN % 4 === 2) beep(nota*4, passo*.9, 'sine', .018);
+  if(fase >= 3 && musN % 8 === 4) beep(nota*2, .08, 'square', .015);
+  musN++;
+}
+
+function faiscas(x, y, col, n = 10, vel = 180){
+  for(let i = 0; i < n; i++){
+    const a = Math.random()*Math.PI*2, v = Math.random()*vel;
+    parts.push({x, y, vx: Math.cos(a)*v, vy: Math.sin(a)*v, life: .5 + Math.random()*.5, max: 1, col, s: 2 + Math.random()*3});
+  }
+}
+
+function iniciarFase(n){
+  fase = n; cfg = configFase(n);
+  player = {x: W/2, y: B-60, dashT: 0, dashCd: 0, dx: 0, dy: -1, tr: []};
+  arrow = {x: 0, y: 0, ux: 0, uy: -1, speed: 0, estado: 'mao', ang: -Math.PI/2};
+  boss = {x: W/2, y: T+130, r: 56, ang: -Math.PI/2, ciclo: 0, estado: 'fechado', dirRot: 1, carga: 0, dashT: 0, dvx: 0, dvy: 1};
+  projs = []; parts = []; fila = []; ondas = []; estado = 'play'; bannerT = 2.2; pausado = false; fade = 1;
+}
+function novaPartida(){ mortes = 0; mortesFase = [0, 0, 0, 0, 0]; runT = 0; iniciarFase(1); }
+
+/* ---------------------------- Ataques ---------------------------- */
+// Anel: a_n projéteis de uma vez, 2π/a_n entre eles.
+// Espiral (fase >= 3): os mesmos a_n projéteis, um a cada 0,07 s.
+function lancar(espiral){
+  const n = cfg.aneis, passo = 2*Math.PI/n * (espiral ? boss.dirRot : 1), off = Math.random()*Math.PI*2;
+  for(let i = 0; i < n; i++) fila.push({t: espiral ? i*.07 : 0, a: off + i*passo, tick: espiral ? 300 + (n-i)*15 : 0});
+  if(espiral) beep(160, .3, 'sawtooth', .06, 80);
+  else { beep(120, .25, 'sawtooth', .07, -60); shake = Math.max(shake, 4); ondas.push({x: boss.x, y: boss.y, t: 0, max: .6, R: 260, col: '255,150,60'}); }
+}
+
+function updFila(dt){
+  fila = fila.filter(p => {
+    if((p.t -= dt) > 0) return true;
+    if(projs.length < MAX_PROJ) projs.push({x: boss.x, y: boss.y, vx: Math.cos(p.a)*cfg.velProj, vy: Math.sin(p.a)*cfg.velProj});
+    if(p.tick) beep(p.tick, .04, 'square', .03);
+    return false;
+  });
+}
+
+function acertar(){
+  const c = coreXY();
+  flash = 1; shake = 16; parada = .09; zoom = 1; zc = c; faiscas(c.x, c.y, '#7ff', 45, 320); fila = [];
+  ondas.push({x: c.x, y: c.y, t: 0, max: .9, R: 520, col: '95,242,255'});
+  beep(880, .15, 'triangle', .1, 400); setTimeout(() => beep(1320, .3, 'triangle', .1, -300), 120);
+  if(fase >= FASES){ estado = 'limpa'; limpaT = 0; boss.estado = 'quebrado'; projs = []; return; }
+  // sem parar: segue na mesma arena, só troca para o próximo termo das sequências
+  fase++; cfg = configFase(fase); bannerT = 2.2;
+  Object.assign(boss, {ciclo: 0, estado: 'fechado', carga: 0, dashT: 0});
+}
+
+function morrer(){
+  estado = 'morto'; mortoT = 0; mortes++; mortesFase[fase-1]++; shake = 10;
+  faiscas(player.x, player.y, '#fff', 30, 260); beep(220, .5, 'sawtooth', .1, -170);
+}
+
+/* ---------------------------- Update ---------------------------- */
+function updJogador(dt){
+  const p = player, jm = Math.hypot(joy.x, joy.y) > .2;             // joystick virtual (celular)
+  let ix = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0) + (jm ? joy.x : 0);
+  let iy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0) + (jm ? joy.y : 0);
+  const l = Math.hypot(ix, iy); if(l){ ix /= l; iy /= l; }
+  let sp = (mouse.right || keys[' ']) && arrow.estado !== 'mao' ? 40 : 170;   // lento ao chamar a flecha
+  p.dashCd -= dt;
+  if(p.dashT <= 0 && keys.shift && p.dashCd <= 0 && l){
+    p.dashT = .16; p.dashCd = .7; p.dx = ix; p.dy = iy; beep(300, .1, 'triangle', .05, 200);
+  }
+  if(p.dashT > 0){
+    p.dashT -= dt; ix = p.dx; iy = p.dy; sp = 520;
+    parts.push({x: p.x-4, y: p.y-4, vx: 0, vy: 0, life: .25, max: .25, col: '#bfe7ff', s: 8});   // rastro
+  }
+  p.x = clamp(p.x + ix*sp*dt, L+10, R-10); p.y = clamp(p.y + iy*sp*dt, T+10, B-10);
+  p.tr.push({x: p.x, y: p.y}); if(p.tr.length > 12) p.tr.shift();   // rastro da capa
+}
+
+function atirar(){
+  if(estado !== 'play' || arrow.estado !== 'mao') return;
+  let dx = mouse.x - player.x, dy = mouse.y - player.y, d = Math.hypot(dx, dy);
+  if(d < 1){ dx = 0; dy = -1; d = 1; }
+  arrow = {x: player.x, y: player.y, ux: dx/d, uy: dy/d, speed: 900, estado: 'voo', ang: Math.atan2(dy, dx)};
+  beep(520, .12, 'triangle', .07, -280);
+}
+
+function updFlecha(dt){
+  const a = arrow, recall = mouse.right || keys[' '];
+  if(a.estado === 'mao') return;
+  const pegar = () => { a.estado = 'mao'; beep(660, .08, 'triangle', .06); };
+  if(recall && a.estado !== 'volta'){ a.estado = 'volta'; a.speed = 120; }
+  else if(!recall && a.estado === 'volta'){ a.estado = 'chao'; a.speed = 0; }
+
+  if(a.estado === 'chao'){ if(dist(a, player) < 18) pegar(); return; }
+  if(a.estado === 'volta'){
+    const d = dist(a, player) || 1;
+    a.ux = (player.x - a.x)/d; a.uy = (player.y - a.y)/d; a.speed = Math.min(a.speed + 1500*dt, 850);
+  }
+  a.x += a.ux*a.speed*dt; a.y += a.uy*a.speed*dt;
+  parts.push({x: a.x, y: a.y, vx: 0, vy: 0, life: .22, max: .22, col: '#ffe6a0', s: 3});   // rastro dourado
+  if(a.estado === 'volta' && dist(a, player) < 14){ pegar(); return; }
+  if(a.estado === 'voo'){
+    a.speed -= 700*dt; if(a.speed <= 0) a.estado = 'chao';
+    if(a.x < L || a.x > R || a.y < T || a.y > B){
+      a.x = clamp(a.x, L, R); a.y = clamp(a.y, T, B); a.estado = 'chao';
+      faiscas(a.x, a.y, '#9aa4c4', 6, 120); beep(140, .06, 'square', .05);
+    }
+  }
+  a.ang = Math.atan2(a.uy, a.ux);
+
+  // acerta o núcleo aberto (indo ou voltando)
+  if(boss.estado === 'aberto' && dist(a, coreXY()) < CORE_R + 4){ acertar(); return; }
+  // quica no corpo do boss (só na ida)
+  const d = dist(a, boss) || 1;
+  if(a.estado === 'voo' && d < boss.r + 3){
+    a.ux = (a.x - boss.x)/d; a.uy = (a.y - boss.y)/d; a.speed = 260;
+    a.x = boss.x + a.ux*(boss.r+5); a.y = boss.y + a.uy*(boss.r+5);
+    faiscas(a.x, a.y, '#ffd27a', 10, 160); beep(180, .08, 'square', .06); shake = Math.max(shake, 3);
+  }
+}
+
+function updBoss(dt){
+  const b = boss, prev = b.ciclo;
+  b.ciclo += dt; b.ang += b.dirRot*cfg.velRot*dt;
+  const cruza = t => prev < t && b.ciclo >= t;   // o ciclo passou do instante t neste frame?
+
+  if(b.ciclo < TF){
+    b.estado = b.ciclo > TF-.4 ? 'aviso' : 'fechado';
+    const dx = player.x - b.x, dy = player.y - b.y, d = Math.hypot(dx, dy) || 1;
+    // investida (fase >= 4): carrega 0,5 s com aviso vermelho e avança na direção do jogador
+    if((fase >= 5 ? [1, 1.9] : fase >= 4 ? [1.9] : []).some(cruza)){ b.carga = .5; beep(90, .5, 'sawtooth', .06, 120); }
+    if(b.carga > 0){
+      b.carga -= dt; b.dvx = dx/d; b.dvy = dy/d;   // a mira acompanha o jogador durante a carga
+      if(b.carga <= 0){ b.dashT = .35; beep(70, .3, 'sawtooth', .1, -30); shake = Math.max(shake, 6); }
+    } else if(b.dashT > 0){
+      b.dashT -= dt; b.x += b.dvx*cfg.velDash*dt; b.y += b.dvy*cfg.velDash*dt;
+    } else { b.x += dx/d*cfg.velBoss*dt; b.y += dy/d*cfg.velBoss*dt; }
+    b.x = clamp(b.x, L+b.r, R-b.r); b.y = clamp(b.y, T+b.r, B-b.r);
+    RING_TIMES.forEach((t, i) => {
+      if(cruza(t - AVISO)) beep(260, .15, 'triangle', .05, 120);   // aviso sonoro do disparo
+      if(cruza(t)) lancar(i === 1 && fase >= 3);
+    });
+  } else if(b.ciclo < TF + cfg.janela){
+    if(b.estado !== 'aberto') beep(740, .12, 'sine', .06, 300);
+    b.estado = 'aberto';
+  } else { b.ciclo = 0; b.dirRot *= -1; b.estado = 'fechado'; }
+}
+
+function update(dt){
+  if(parada > 0){ parada -= dt; return; }          // hit-stop: congela o jogo por um instante
+  zoom = Math.max(0, zoom - 4*dt); fade = Math.max(0, fade - 2*dt);
+  tempo += dt; shake = Math.max(0, shake - 40*dt); flash = Math.max(0, flash - 2*dt); bannerT = Math.max(0, bannerT - dt);
+  parts = parts.filter(p => { p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= .96; p.vy *= .96; return (p.life -= dt) > 0; });
+  ondas = ondas.filter(o => (o.t += dt) < o.max);
+  if(estado === 'play'){
+    runT += dt; musica(dt);
+    updJogador(dt); updFlecha(dt);
+    if(estado !== 'play') return;
+    updBoss(dt); updFila(dt);
+    projs = projs.filter(p => { p.x += p.vx*dt; p.y += p.vy*dt; return p.x > L-20 && p.x < R+20 && p.y > T-20 && p.y < B+20; });
+    if(projs.some(p => dist(p, player) < 12) || dist(boss, player) < boss.r + 6) morrer();
+  } else if(estado === 'limpa'){
+    limpaT += dt; boss.ang += dt*3; shake = Math.max(shake, 5);
+    if(Math.random() < .6) faiscas(boss.x + (Math.random()-.5)*90, boss.y + (Math.random()-.5)*90, '#7ff', 6, 260);   // o Colosso se desfaz
+    if(limpaT > 2.2){
+      estado = 'vitoria'; beep(523, .2, 'triangle', .1); setTimeout(() => beep(784, .4, 'triangle', .1), 200);
+      novoRec = false;
+      if(!modoTreino && (melhor === null || runT < melhor)){ melhor = runT; novoRec = true; try{ localStorage.setItem('ultimaFlechaRecorde', melhor); }catch(_){} }
+    }
+  } else if(estado === 'morto') mortoT += dt;
+  else if(estado === 'vitoria' && Math.random() < .5)   // faíscas douradas subindo
+    parts.push({x: Math.random()*W, y: H*(.4 + Math.random()*.6), vx: 0, vy: -250, life: 1.2, max: 1.2, col: '#f2d98a', s: 2 + Math.random()*3});
+}
+
+/* ---------------------------- Cenário pré-renderizado ---------------------------- */
+// Piso de pedra (desenhado uma única vez)
+const piso = document.createElement('canvas'); piso.width = W; piso.height = H;
+(function(){
+  const g = piso.getContext('2d'); let s = 7;
+  const rnd = () => (s = s*16807 % 2147483647) / 2147483647;
+  g.fillStyle = '#05060b'; g.fillRect(0, 0, W, H);
+  for(let x = L; x < R; x += 40) for(let y = T; y < B; y += 40){
+    const v = 24 + Math.floor(rnd()*10);
+    g.fillStyle = 'rgb(' + v + ',' + (v+3) + ',' + (v+15) + ')'; g.fillRect(x, y, 40, 40);
+    for(let i = 0; i < 5; i++){
+      g.fillStyle = rnd() < .5 ? 'rgba(0,0,0,' + (.04 + rnd()*.06) + ')' : 'rgba(140,160,220,' + (.02 + rnd()*.03) + ')';
+      g.beginPath(); g.arc(x + rnd()*40, y + rnd()*40, 2 + rnd()*9, 0, 7); g.fill();
+    }
+    g.fillStyle = 'rgba(255,255,255,.03)'; g.fillRect(x, y, 40, 2); g.fillRect(x, y, 2, 40);
+    g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(x, y+38, 40, 2); g.fillRect(x+38, y, 2, 40);
+  }
+  g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 1.5;                       // rachaduras do chão
+  for(let i = 0; i < 16; i++){
+    let x = L + rnd()*(R-L), y = T + rnd()*(B-T); g.beginPath(); g.moveTo(x, y);
+    for(let k = 0; k < 6; k++){ x += (rnd()-.5)*44; y += (rnd()-.5)*44; g.lineTo(x, y); }
+    g.stroke();
+  }
+  g.strokeStyle = 'rgba(95,242,255,.18)'; g.lineWidth = 2;                    // círculos rúnicos
+  [200, 140, 90].forEach(r => { g.beginPath(); g.arc(W/2, H/2, r, 0, 7); g.stroke(); });
+  for(let i = 0; i < 24; i++){
+    const a = i*Math.PI/12, r2 = i % 2 ? 172 : 190;
+    g.beginPath(); g.moveTo(W/2 + Math.cos(a)*150, H/2 + Math.sin(a)*150); g.lineTo(W/2 + Math.cos(a)*r2, H/2 + Math.sin(a)*r2); g.stroke();
+  }
+  const sombra = (x0, y0, x1, y1, rx, ry, rw, rh) => {                         // sombra interna nas bordas
+    const gr = g.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(rx, ry, rw, rh);
+  };
+  sombra(0, T, 0, T+50, L, T, R-L, 50); sombra(0, B, 0, B-50, L, B-50, R-L, 50);
+  sombra(L, 0, L+50, 0, L, T, 50, B-T); sombra(R, 0, R-50, 0, R-50, T, 50, B-T);
+  g.lineWidth = 8; g.strokeStyle = '#1a2033'; g.strokeRect(L-4, T-4, R-L+8, B-T+8);   // moldura de pedra
+  g.lineWidth = 1.5; g.strokeStyle = 'rgba(160,180,240,.3)'; g.strokeRect(L, T, R-L, B-T);
+  g.strokeStyle = 'rgba(0,0,0,.7)'; g.strokeRect(L-8, T-8, R-L+16, B-T+16);
+  PILARES.forEach(([x, y]) => {                                                // pilares dos braseiros
+    const gr = g.createRadialGradient(x-4, y-4, 2, x, y, 18); gr.addColorStop(0, '#4a5170'); gr.addColorStop(1, '#171b2a');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, 18, 0, 7); g.fill(); g.strokeStyle = '#0a0c14'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = '#07080d'; g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill();
+  });
+})();
+
+// Vinheta escura nas bordas
+const vig = document.createElement('canvas'); vig.width = W; vig.height = H;
+(function(){
+  const g = vig.getContext('2d'), r = g.createRadialGradient(W/2, H/2, H*.35, W/2, H/2, W*.62);
+  r.addColorStop(0, 'rgba(0,0,0,0)'); r.addColorStop(1, 'rgba(0,0,0,.72)'); g.fillStyle = r; g.fillRect(0, 0, W, H);
+})();
+
+/* ---------------------------- Desenho ---------------------------- */
+function txt(s, x, y, size = 18, col = '#dfe6f3', al = 'center', bold = false){
+  ctx.font = bold ? 'bold ' + size + 'px ' + FONTE : size + 'px system-ui, sans-serif'; ctx.textAlign = al;
+  ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillText(s, x+1, y+2);
+  if(bold){ ctx.shadowColor = col; ctx.shadowBlur = 14; }
+  ctx.fillStyle = col; ctx.fillText(s, x, y); ctx.shadowBlur = 0;
+}
+const linhas = (arr, y, dy, size, col) => arr.forEach((l, i) => txt(l, W/2, y + i*dy, size, col));
+const overlay = cor => { ctx.fillStyle = cor; ctx.fillRect(0, 0, W, H); };
+const piscar = (s, y) => { ctx.globalAlpha = .55 + Math.sin(tempo*4)*.45; txt(s, W/2, y, 22, '#f2d98a', 'center', true); ctx.globalAlpha = 1; };
+function circ(x, y, r, fill, stroke){   // círculo preenchido e/ou contornado
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
+  if(fill){ ctx.fillStyle = fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function luz(x, y, r, rgb, a){          // brilho aditivo (glow)
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); g.addColorStop(1, 'rgba(' + rgb + ',0)');
+  ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(x-r, y-r, r*2, r*2); ctx.globalCompositeOperation = 'source-over';
+}
+
+function desenharPiso(){
+  ctx.drawImage(piso, 0, 0);
+  ctx.strokeStyle = 'rgba(95,242,255,' + (.1 + Math.sin(tempo*2)*.05) + ')'; ctx.lineWidth = 3;   // runas pulsando
+  [200, 140, 90].forEach(r => { ctx.beginPath(); ctx.arc(W/2, H/2, r, 0, 7); ctx.stroke(); });
+  PILARES.forEach(([x, y], i) => {                                                                 // braseiros
+    const f = .8 + Math.sin(tempo*9 + i*2)*.12 + Math.sin(tempo*23 + i)*.08;
+    luz(x, y, 190, '255,140,50', .26*f); luz(x, y-2, 24*f, '255,200,90', .8);
+    ctx.fillStyle = 'rgba(255,235,160,.9)'; ctx.beginPath(); ctx.ellipse(x, y-3, 4*f, 8*f, 0, 0, 7); ctx.fill();
+  });
+}
+
+function desenharPoeira(){
+  ctx.globalCompositeOperation = 'lighter';
+  for(let i = 0; i < 46; i++){
+    const x = L + mod(i*137.5 + tempo*(5 + i%5*3), R-L), y = T + mod(i*91.3 - tempo*(7 + i%4*4), B-T), a = .12 + .1*Math.sin(tempo*1.5 + i);
+    ctx.fillStyle = i % 3 ? 'rgba(150,200,255,' + a + ')' : 'rgba(255,200,120,' + a + ')'; ctx.fillRect(x, y, 1.8, 1.8);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function desenharEclipse(x, y, r){
+  luz(x, y, r*2.6, '255,170,80', .25);
+  const g = ctx.createRadialGradient(x, y, r*.95, x, y, r*1.7); g.addColorStop(0, 'rgba(255,225,170,.6)'); g.addColorStop(1, 'rgba(255,160,80,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r*1.7, 0, 7); ctx.fill();
+  circ(x, y, r, '#02030a'); ctx.lineWidth = 2; circ(x, y, r, 0, 'rgba(255,230,190,.85)');
+}
+
+function desenharBoss(){
+  const b = boss, c = coreXY(), tr = b.carga > 0 ? 2.5 : 0;
+  const bx = b.x + (Math.random()-.5)*tr, by = b.y + (Math.random()-.5)*tr;   // treme ao carregar a investida
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(bx+8, by+14, b.r*1.05, b.r*.95, 0, 0, 7); ctx.fill();
+  if(b.carga > 0) luz(bx, by, 150, '255,60,60', .4 + Math.sin(tempo*40)*.15);
+  ctx.save(); ctx.translate(bx, by);
+  circ(0, 0, b.r+1, '#0a0d14');
+  ctx.save(); ctx.rotate(b.ang*.3);                                              // placas externas girando
+  const g1 = ctx.createRadialGradient(-20, -20, 10, 0, 0, b.r); g1.addColorStop(0, '#8d94ab'); g1.addColorStop(.6, '#4c526b'); g1.addColorStop(1, '#272b3b');
+  for(let i = 0; i < 8; i++){
+    const a0 = i*Math.PI/4 + .05, a1 = a0 + Math.PI/4 - .1, am = (a0 + a1)/2;
+    ctx.beginPath(); ctx.arc(0, 0, b.r, a0, a1); ctx.arc(0, 0, b.r*.78, a1, a0, true); ctx.closePath();
+    ctx.fillStyle = g1; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#10131d'; ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,215,255,.28)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, b.r-2, a0+.04, a1-.04); ctx.stroke();
+    circ(Math.cos(am)*b.r*.89, Math.sin(am)*b.r*.89, 2.5, '#2a2f44');
+  }
+  ctx.restore();
+  const g2 = ctx.createRadialGradient(-12, -12, 4, 0, 0, b.r*.78); g2.addColorStop(0, '#646b88'); g2.addColorStop(1, '#1d2132');   // disco interno
+  ctx.lineWidth = 2; circ(0, 0, b.r*.76, g2, '#0b0d15');
+  ctx.setLineDash([3, 5]); ctx.lineWidth = 1.5; circ(0, 0, b.r*.72, 0, 'rgba(190,205,255,.2)'); ctx.setLineDash([]);          // trilho do núcleo
+  ctx.save(); ctx.rotate(-b.ang*.5); ctx.strokeStyle = 'rgba(150,165,210,.45)'; ctx.lineWidth = 2; ctx.beginPath();            // estrela gravada
+  for(let k = 0; k < 8; k++){ const a = k*Math.PI/4, rr = k % 2 ? 14 : 22; ctx.moveTo(Math.cos(a)*6, Math.sin(a)*6); ctx.lineTo(Math.cos(a)*rr, Math.sin(a)*rr); }
+  ctx.stroke(); circ(0, 0, 5, '#232738', 'rgba(150,165,210,.5)'); ctx.restore();
+  for(let i = 0; i < fase-1; i++){                                               // rachaduras brilhantes = fases vencidas
+    const a = i*1.3 + .5;
+    ctx.beginPath(); ctx.moveTo(Math.cos(a)*10, Math.sin(a)*10); ctx.lineTo(Math.cos(a+.2)*b.r*.5, Math.sin(a+.2)*b.r*.5); ctx.lineTo(Math.cos(a-.1)*b.r*.95, Math.sin(a-.1)*b.r*.95);
+    ctx.strokeStyle = '#05070c'; ctx.lineWidth = 4; ctx.stroke(); ctx.strokeStyle = 'rgba(95,242,255,.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  ctx.restore();
+
+  const est = b.estado, pisca = Math.floor(tempo*12) % 2, pisca2 = Math.floor(tempo*20) % 2;
+  const forte = est === 'aberto' || est === 'quebrado' || (est === 'aviso' && pisca);
+  const base = est === 'quebrado' ? (pisca2 ? '255,255,255' : '255,90,90') : forte ? '95,242,255' : '60,70,100';
+  luz(c.x, c.y, forte ? 70 + Math.sin(tempo*10)*10 : 28, base, forte ? .75 : .25);
+  circ(c.x, c.y, CORE_R+4, '#07090f');
+  const gg = ctx.createRadialGradient(c.x-4, c.y-4, 1, c.x, c.y, CORE_R);
+  gg.addColorStop(0, forte ? '#ffffff' : '#6b7390'); gg.addColorStop(.45, 'rgb(' + base + ')'); gg.addColorStop(1, forte ? '#0a6d80' : '#12151f');
+  circ(c.x, c.y, CORE_R, gg);
+  ctx.strokeStyle = 'rgba(255,255,255,' + (forte ? .5 : .15) + ')'; ctx.lineWidth = 1; ctx.beginPath();   // facetas da gema
+  for(let k = 0; k < 6; k++){ const a = k*Math.PI/3 + b.ang; ctx.moveTo(c.x, c.y); ctx.lineTo(c.x + Math.cos(a)*CORE_R*.9, c.y + Math.sin(a)*CORE_R*.9); }
+  ctx.stroke();
+  if(est === 'aberto'){                                                          // raios de luz
+    ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(150,250,255,.6)'; ctx.lineWidth = 2; ctx.beginPath();
+    for(let k = 0; k < 8; k++){ const a = k*Math.PI/4 + tempo*2, r0 = CORE_R + 3, r1 = CORE_R + 12 + Math.sin(tempo*8 + k)*4; ctx.moveTo(c.x + Math.cos(a)*r0, c.y + Math.sin(a)*r0); ctx.lineTo(c.x + Math.cos(a)*r1, c.y + Math.sin(a)*r1); }
+    ctx.stroke(); ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.lineWidth = 2; circ(c.x, c.y, CORE_R, 0, '#0c0e15');
+}
+
+function desenharSeta(x, y, ang, col = '#f2d98a'){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+  ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-24, 0); ctx.lineTo(4, 0); ctx.stroke();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(2, -5); ctx.lineTo(2, 5); ctx.fill();
+  ctx.strokeStyle = '#c9b06a'; ctx.lineWidth = 2; ctx.beginPath();
+  ctx.moveTo(-24, 0); ctx.lineTo(-29, -4); ctx.moveTo(-24, 0); ctx.lineTo(-29, 4); ctx.stroke();
+  ctx.restore();
+}
+
+function desenharJogador(){
+  const p = player, ang = Math.atan2(mouse.y - p.y, mouse.x - p.x), cs = Math.cos(ang), sn = Math.sin(ang), dash = p.dashT > 0;
+  luz(p.x, p.y, 90, '255,215,140', .14);
+  ctx.lineCap = 'round';                                                          // capa (rastro afilado)
+  for(let i = 1; i < p.tr.length; i++){
+    const a = p.tr[i-1], b = p.tr[i], k = i/p.tr.length;
+    ctx.strokeStyle = 'rgba(70,110,170,' + .55*k + ')'; ctx.lineWidth = 10*k; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(p.x+2, p.y+6, 9, 6, 0, 0, 7); ctx.fill();
+  ctx.lineWidth = 2; circ(p.x, p.y, 8, dash ? '#bfe7ff' : '#35527f', dash ? '#ffffff' : '#1b2a45');
+  circ(p.x + cs*2, p.y + sn*2, 4.5, '#f3e7d3');                                  // cabeça
+  ctx.strokeStyle = '#d8574a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, 7, ang + 1.9, ang + 4.3); ctx.stroke();   // lenço
+  ctx.strokeStyle = '#c9a45a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 14, ang - 1, ang + 1); ctx.stroke();       // arco
+  ctx.strokeStyle = 'rgba(230,230,230,.6)'; ctx.lineWidth = 1; ctx.beginPath();
+  ctx.moveTo(p.x + Math.cos(ang-1)*14, p.y + Math.sin(ang-1)*14); ctx.lineTo(p.x + Math.cos(ang+1)*14, p.y + Math.sin(ang+1)*14); ctx.stroke();
+  circ(p.x, p.y, 2.2, '#ffffff');                                                 // hitbox visível (o ponto que conta)
+}
+
+function desenharJogo(){
+  desenharPiso();
+  const c = coreXY(), est = boss.estado;                                          // luz que o núcleo joga no chão
+  luz(c.x, c.y, 190, est === 'quebrado' ? '255,120,120' : '95,242,255', est === 'aberto' ? .3 + Math.sin(tempo*10)*.08 : est === 'aviso' ? .1 : .05);
+  ondas.forEach(o => { const k = o.t/o.max; ctx.lineWidth = 1 + 4*(1-k); circ(o.x, o.y, k*o.R, 0, 'rgba(' + o.col + ',' + .7*(1-k) + ')'); });
+  if(arrow.estado === 'chao'){                                                    // sinalizador da flecha no chão
+    const s = Math.sin(tempo*6); luz(arrow.x, arrow.y, 46, '255,220,140', .35 + s*.12);
+    ctx.lineWidth = 2; circ(arrow.x, arrow.y, 14 + s*2, 0, 'rgba(242,217,138,' + (.45 + s*.25) + ')');
+  }
+  if(arrow.estado !== 'mao'){ if(arrow.estado !== 'chao') luz(arrow.x, arrow.y, 30, '255,220,140', .5); desenharSeta(arrow.x, arrow.y, arrow.ang); }
+  if(boss.carga > 0){   // aviso da investida: corredor vermelho
+    ctx.strokeStyle = 'rgba(255,70,70,' + (.18 + Math.sin(tempo*30)*.1) + ')'; ctx.lineWidth = boss.r*2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(boss.x, boss.y); ctx.lineTo(boss.x + boss.dvx*cfg.velDash*.35, boss.y + boss.dvy*cfg.velDash*.35); ctx.stroke(); ctx.lineCap = 'butt';
+  }
+  const t = RING_TIMES.find(t => boss.ciclo >= t - AVISO && boss.ciclo < t);      // aviso do disparo: anel laranja que fecha no boss
+  if(estado === 'play' && t !== undefined){
+    const p = (boss.ciclo - (t - AVISO))/AVISO;
+    luz(boss.x, boss.y, boss.r + 60, '255,150,60', .25*p);
+    ctx.lineWidth = 4; circ(boss.x, boss.y, boss.r + 34*(1-p), 0, 'rgba(255,150,60,' + (.25 + .6*p) + ')');
+  }
+  desenharBoss();
+  projs.forEach(p => {                                                            // projéteis com cauda e brilho
+    for(let k = 3; k >= 1; k--) circ(p.x - p.vx*.014*k, p.y - p.vy*.014*k, 6 - k*1.2, 'rgba(255,140,60,' + .22/k + ')');
+    luz(p.x, p.y, 20, '255,120,40', .55); circ(p.x, p.y, 6, '#ffb066'); circ(p.x, p.y, 3, '#fff4d6');
+  });
+  if(estado !== 'morto'){
+    if(arrow.estado === 'mao'){
+      const a = Math.atan2(mouse.y - player.y, mouse.x - player.x), cs = Math.cos(a), sn = Math.sin(a);
+      ctx.strokeStyle = 'rgba(242,217,138,.22)'; ctx.setLineDash([4, 8]); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(player.x, player.y); ctx.lineTo(player.x + cs*170, player.y + sn*170); ctx.stroke(); ctx.setLineDash([]);
+      desenharSeta(player.x + cs*18, player.y + sn*18, a);
+    }
+    desenharJogador();
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  parts.forEach(p => { ctx.globalAlpha = clamp(p.life/p.max, 0, 1); ctx.fillStyle = p.col; ctx.fillRect(p.x, p.y, p.s, p.s); });
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  desenharPoeira();
+  ctx.drawImage(vig, 0, 0);
+}
+
+function desenharHUD(){
+  let g = ctx.createLinearGradient(0, 0, 0, 56); g.addColorStop(0, 'rgba(0,0,0,.65)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 56);
+  g = ctx.createLinearGradient(0, H-50, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.65)'); ctx.fillStyle = g; ctx.fillRect(0, H-50, W, 50);
+  txt('FASE ' + fase + '/' + FASES, 56, 30, 16, '#c3cbe0', 'left', true);
+  txt(fmt(runT) + (modoTreino ? '  ·  modo treino' : ''), 56, 50, 13, '#8a93b3', 'left');
+  for(let i = 0; i < FASES; i++){
+    const x = W/2 - (FASES-1)*14 + i*28, cheio = i < (estado === 'limpa' || estado === 'vitoria' ? fase : fase-1);
+    if(cheio) luz(x, 24, 26, '95,242,255', .7);
+    ctx.beginPath(); ctx.moveTo(x, 13); ctx.lineTo(x+9, 24); ctx.lineTo(x, 35); ctx.lineTo(x-9, 24); ctx.closePath();
+    ctx.fillStyle = cheio ? '#9ff8ff' : '#1c2133'; ctx.fill(); ctx.strokeStyle = cheio ? '#ffffff' : '#3a415c'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  const pr = clamp(1 - player.dashCd/.7, 0, 1);   // recarga do dash
+  if(pr >= 1) luz(W-96, H-20, 60, '95,242,255', .25);
+  ctx.fillStyle = 'rgba(20,24,38,.9)'; ctx.fillRect(W-136, H-24, 80, 8);
+  ctx.fillStyle = pr >= 1 ? '#5ff2ff' : '#6d7694'; ctx.fillRect(W-136, H-24, 80*pr, 8);
+  ctx.strokeStyle = 'rgba(160,180,240,.35)'; ctx.lineWidth = 1; ctx.strokeRect(W-136, H-24, 80, 8);
+  txt('Dash (Shift)', W-146, H-14, 14, '#9aa4c4', 'right');
+  txt(somLigado ? 'M: som ligado' : 'M: som mudo', W-56, 28, 14, '#8a93b3', 'right');
+  const st = {mao: 'Flecha: na mão', voo: 'Flecha: voando', chao: 'Flecha: no chão — pegue ou segure Espaço', volta: 'Flecha: voltando…'}[arrow.estado];
+  txt(st, 56, H-14, 15, arrow.estado === 'mao' ? '#f2d98a' : '#ff9b7a', 'left');
+  if(fase === 1 && estado === 'play') txt('Só o núcleo brilhante (ciano) pode ser ferido. Quando ele piscar, está para abrir!', W/2, H-14, 15, '#c3cbe0');
+}
+
+function desenharToque(){   // joystick e botões (celular)
+  const jx = joy.id !== null ? joy.ox : 110, jy = joy.id !== null ? joy.oy : H-110, prd = clamp(1 - player.dashCd/.7, 0, 1);
+  ctx.lineWidth = 2; circ(jx, jy, 50, 'rgba(255,255,255,.05)', 'rgba(255,255,255,.25)');
+  circ(jx + joy.x*40, jy + joy.y*40, 22, 'rgba(255,255,255,.22)', 'rgba(255,255,255,.5)');
+  [['dash', 'DASH'], ['volta', 'FLECHA'], ['pausa', 'II']].forEach(([k, nome]) => {
+    const b = BTN[k], ativo = Object.values(botoes).includes(k);
+    ctx.lineWidth = 2; circ(b.x, b.y, b.r, ativo ? 'rgba(95,242,255,.3)' : 'rgba(255,255,255,.08)', 'rgba(255,255,255,.35)');
+    txt(nome, b.x, b.y + 5, 13, '#dfe6f3');
+    if(k === 'dash'){ ctx.lineWidth = 3; ctx.strokeStyle = '#5ff2ff'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4, -Math.PI/2, -Math.PI/2 + 6.283*prd); ctx.stroke(); }
+  });
+}
+
+function desenharMenu(){
+  const clq = toque ? 'Toque' : 'Clique';
+  desenharPiso(); overlay('rgba(5,6,10,.82)'); desenharPoeira(); desenharEclipse(W/2, 30, 38);
+  txt('A ÚLTIMA FLECHA', W/2, 104, 46, '#f2d98a', 'center', true);
+  txt('O despertar do Colosso de Pedra', W/2, 136, 18, '#9aa4c4');
+  linhas(['Sob o Observatório esquecido, um colosso de pedra dorme.',
+          'A cada eclipse ele desperta, e o vale inteiro escurece.',
+          'Você carrega uma única flecha — é tudo o que resta de esperança.',
+          'Derrube o núcleo do Colosso cinco vezes. A cada queda, ele se reergue mais furioso.'], 186, 26, 17);
+  txt('COMO JOGAR', W/2, 316, 18, '#5ff2ff', 'center', true);
+  linhas(['WASD / Setas: mover      Mouse: mirar      Clique: atirar a flecha',
+          'Segure Espaço ou botão direito: chamar a flecha de volta (você fica lento)',
+          'Shift: disparada rápida      R: recomeçar      P: pausar      M: som      F: tela cheia',
+          'Só o núcleo brilhante é vulnerável. Se ele piscar, está prestes a abrir.',
+          'Celular: joystick à esquerda · toque à direita para atirar · botões DASH e FLECHA',
+          'T: modo treino (cair não volta à fase 1) [' + (modoTreino ? 'ligado' : 'desligado') + ']      K: reduzir tremor e flash [' + (reduzir ? 'ligado' : 'desligado') + ']'], 346, 24, 16, '#c3cbe0');
+  if(melhor !== null) txt('Seu recorde: ' + fmt(melhor), W/2, 506, 15, '#f2d98a');
+  piscar(clq + ' para começar', 548);
+  ctx.drawImage(vig, 0, 0);
+}
+
+function desenhar(){
+  ctx.save();
+  if(shake > 0 && !reduzir) ctx.translate((Math.random()-.5)*shake, (Math.random()-.5)*shake);
+  if(zoom > 0 && !reduzir){ const s = 1 + zoom*.06; ctx.translate(zc.x, zc.y); ctx.scale(s, s); ctx.translate(-zc.x, -zc.y); }   // zoom no acerto
+  if(estado === 'menu') desenharMenu();
+  else {
+    desenharJogo(); desenharHUD();
+    if(bannerT > 0 && estado === 'play'){                                         // título e enredo da fase
+      ctx.globalAlpha = Math.min(1, bannerT*2);
+      txt('Fase ' + fase + '/' + FASES, W/2, 92, 28, '#5ff2ff', 'center', true); txt(FRASES[fase-1], W/2, 122, 18, '#dfe6f3');
+      ctx.globalAlpha = 1;
+    }
+    if(toque && estado === 'play') desenharToque();
+    if(estado === 'limpa'){ overlay('rgba(0,0,0,' + clamp(limpaT*.25, 0, .5) + ')'); txt('O Colosso desaba!', W/2, H/2, 38, '#5ff2ff', 'center', true); }
+    if(estado === 'morto'){
+      overlay('rgba(60,0,0,.5)'); txt('Você caiu', W/2, H/2-10, 40, '#ff7a7a', 'center', true);
+      if(mortoT > .4){
+        txt((toque ? 'Toque' : 'Clique ou pressione R') + ' para tentar de novo', W/2, H/2+30, 18);
+        txt('Fase ' + fase + '/' + FASES + '  ·  quedas nesta fase: ' + mortesFase[fase-1], W/2, H/2+60, 15, '#9aa4c4');
+        txt(modoTreino ? 'Modo treino: você continua na fase ' + fase : 'Você volta para a fase 1', W/2, H/2+84, 15, '#9aa4c4');
+      }
+    }
+    if(estado === 'vitoria'){
+      overlay('rgba(5,6,10,.85)'); desenharEclipse(W/2, 120, 40); txt('O ECLIPSE TERMINOU', W/2, 210, 42, '#f2d98a', 'center', true);
+      linhas(['O último estilhaço do núcleo se apaga e o Colosso vira poeira.',
+              'A luz volta ao vale, e a sua flecha — a única — brilha uma última vez.',
+              'O Observatório finalmente pode descansar.'], 262, 28, 18);
+      txt('Tempo: ' + fmt(runT) + (novoRec ? '  —  novo recorde!' : melhor !== null && !modoTreino ? '  (recorde ' + fmt(melhor) + ')' : ''), W/2, 380, 20, novoRec ? '#f2d98a' : '#c3cbe0');
+      txt('Quedas: ' + mortes + '   (por fase: ' + mortesFase.join(' · ') + ')', W/2, 408, 16, '#9aa4c4');
+      piscar((toque ? 'Toque' : 'Clique') + ' para jogar de novo', 470);
+      ctx.globalCompositeOperation = 'lighter';
+      parts.forEach(p => { ctx.globalAlpha = clamp(p.life/p.max, 0, 1); ctx.fillStyle = p.col; ctx.fillRect(p.x, p.y, p.s, p.s); });
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+  if(pausado){ overlay('rgba(5,6,10,.7)'); txt('PAUSADO', W/2, H/2-10, 44, '#f2d98a', 'center', true); txt((toque ? 'Toque' : 'P ou clique') + ' para continuar', W/2, H/2+30); }
+  if(flash > 0 && !reduzir) overlay('rgba(160,255,255,' + flash*.55 + ')');
+  ctx.restore();
+  if(fade > 0) overlay('rgba(5,6,10,' + fade + ')');
+}
+
+/* ---------------------------- Entrada: mouse e teclado ---------------------------- */
+function clique(){   // ação do clique/toque conforme o estado do jogo
+  if(estado === 'menu' || estado === 'vitoria') novaPartida();
+  else if(estado === 'morto'){ if(mortoT > .4) iniciarFase(modoTreino ? fase : 1); }
+  else atirar();
+}
+function posMouse(e){ const r = cv.getBoundingClientRect(); mouse.x = (e.clientX - r.left)*W/r.width; mouse.y = (e.clientY - r.top)*H/r.height; }
+cv.addEventListener('mousemove', posMouse);
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('mousedown', e => {
+  posMouse(e); iniciarAudio();
+  if(pausado){ pausado = false; return; }
+  if(e.button === 2){ mouse.right = true; return; }
+  clique();
+});
+addEventListener('mouseup', e => { if(e.button === 2) mouse.right = false; });
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
+  keys[k] = true;
+  if(k === 'r'){ if(estado === 'play') novaPartida(); else if(estado === 'morto') clique(); }
+  if(k === 'm') somLigado = !somLigado;
+  if(k === 'k') reduzir = !reduzir;
+  if(k === 't' && estado === 'menu') modoTreino = !modoTreino;
+  if(k === 'f'){ if(document.fullscreenElement) document.exitFullscreen(); else if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); }
+  if((k === 'p' || k === 'escape') && estado === 'play') pausado = !pausado;
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for(const k in keys) keys[k] = false; mouse.right = false; if(estado === 'play') pausado = true; });
+
+/* ---------------------------- Entrada: celular (toque) ---------------------------- */
+const joy = {id: null, ox: 0, oy: 0, x: 0, y: 0}, botoes = {};
+const BTN = {dash: {x: W-80, y: H-130, r: 38}, volta: {x: W-170, y: H-80, r: 38}, pausa: {x: W-40, y: 78, r: 22}};
+const ptToque = t => { const r = cv.getBoundingClientRect(); return {x: (t.clientX - r.left)*W/r.width, y: (t.clientY - r.top)*H/r.height}; };
+cv.addEventListener('touchstart', e => {
+  e.preventDefault(); toque = true; iniciarAudio();
+  for(const t of e.changedTouches){
+    const p = ptToque(t);
+    if(pausado){ pausado = false; continue; }
+    if(estado !== 'play'){ clique(); continue; }
+    const nome = Object.keys(BTN).find(k => dist(p, BTN[k]) < BTN[k].r + 10);
+    if(nome){
+      botoes[t.identifier] = nome;
+      if(nome === 'dash') keys.shift = true; else if(nome === 'volta') mouse.right = true; else pausado = true;
+    } else if(p.x < W*.4 && joy.id === null) Object.assign(joy, {id: t.identifier, ox: p.x, oy: p.y, x: 0, y: 0});
+    else { mouse.x = p.x; mouse.y = p.y; atirar(); }
+  }
+}, {passive: false});
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    const p = ptToque(t);
+    if(t.identifier === joy.id){
+      const dx = p.x - joy.ox, dy = p.y - joy.oy, d = Math.hypot(dx, dy), k = Math.min(d, 50)/50;
+      joy.x = d ? dx/d*k : 0; joy.y = d ? dy/d*k : 0;
+    } else if(!botoes[t.identifier]){ mouse.x = p.x; mouse.y = p.y; }
+  }
+}, {passive: false});
+const fimToque = e => {
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier === joy.id){ joy.id = null; joy.x = joy.y = 0; }
+    const n = botoes[t.identifier]; delete botoes[t.identifier];
+    if(n === 'dash') keys.shift = false;
+    if(n === 'volta') mouse.right = false;
+  }
+};
+cv.addEventListener('touchend', fimToque, {passive: false});
+cv.addEventListener('touchcancel', fimToque, {passive: false});
+
+/* ---------------------------- Loop ---------------------------- */
+iniciarFase(1); estado = 'menu'; fade = 0; bannerT = 0;
+let ultimo = performance.now();
+(function loop(agora){
+  const dt = Math.min(.033, (agora - ultimo)/1000); ultimo = agora;
+  if(!pausado) update(dt);
+  desenhar(); requestAnimationFrame(loop);
+})(ultimo);
+</script>
+</body>
+</html>
