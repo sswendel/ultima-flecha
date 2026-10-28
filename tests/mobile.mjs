@@ -2,18 +2,26 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
-function game(mobile=true,ranking=false){
+function game(mobile=true,ranking=false,fullscreen={}){
+ const fullCalls=[];
  const requests=[];
  const all=new Map(),win={};let raf;
  const gradient={addColorStop(){}};
  const ctx=new Proxy({},{get:(o,k)=>o[k]||(()=>gradient),set:(o,k,v)=>(o[k]=v,true)});
- function element(id){if(all.has(id))return all.get(id);const handlers={};const el={id,handlers,style:{},hidden:false,tagName:'DIV',classList:{toggle(){},add(){},remove(){}},getContext:()=>ctx,getBoundingClientRect:()=>({left:0,top:0,width:id==='mobile-joy'?120:960,height:id==='mobile-joy'?120:600}),addEventListener:(n,f)=>(handlers[n]??=[]).push(f),setAttribute(){},focus(){},append(){},replaceChildren(){},querySelector:s=>element(s==='form'?'rank-form':s==='input'?'rank-name':s==='button'?'rank-save':s.replace(/^#/,'')),blur(){},setPointerCapture(){},showModal(){this.open=true;},close(){this.open=false;},fire(n,extra={}){for(const f of handlers[n]||[])f({pointerId:1,pointerType:'touch',clientX:60,clientY:60,preventDefault(){},stopPropagation(){},...extra});}};all.set(id,el);return el;}
+ function element(id){if(all.has(id))return all.get(id);const handlers={};const el={id,handlers,style:{},hidden:false,tagName:'DIV',classList:{toggle(){},add(){},remove(){}},getContext:()=>ctx,getBoundingClientRect:()=>({left:0,top:0,width:id==='mobile-joy'?120:960,height:id==='mobile-joy'?120:600}),addEventListener:(n,f)=>(handlers[n]??=[]).push(f),setAttribute(){},focus(){},append(){},replaceChildren(){},querySelector:s=>element(s==='form'?'rank-form':s==='input'?'rank-name':s==='button'?'rank-save':s.replace(/^#/,'')),blur(){},setPointerCapture(){},showModal(){this.open=true;},close(){this.open=false;},fire(n,extra={}){return Promise.all((handlers[n]||[]).map(f=>f({pointerId:1,pointerType:'touch',clientX:60,clientY:60,preventDefault(){},stopPropagation(){},...extra})));}};all.set(id,el);return el;}
  const document={hidden:false,documentElement:{style:{setProperty(){}}},body:element('body'),getElementById:element,querySelector:element,createElement:()=>element('canvas'+all.size),addEventListener:(n,f)=>(win[n]??=[]).push(f)};
- const sandbox={console:{log(){}},document,window:{RANKING_API:ranking?'https://ranking.test':''},AbortSignal,fetch:async(url,options)=>{const path=new URL(url).pathname;requests.push({path,body:options.body?JSON.parse(options.body):null});return {ok:true,json:async()=>path==='/start'?{ticket:'session-'+requests.filter(r=>r.path==='/start').length}:path==='/finish'?{qualified:true,rank:1,entries:[]}:{entries:[]}};},navigator:{maxTouchPoints:mobile?5:0},innerWidth:mobile?390:1366,innerHeight:mobile?844:768,matchMedia:()=>({matches:mobile}),localStorage:{getItem:()=>null,setItem(){}},performance:{now:()=>0},requestAnimationFrame:f=>raf=f,setTimeout(){},addEventListener:(n,f)=>(win[n]??=[]).push(f)};
+ const sandbox={console:{log(){}},document,window:{RANKING_API:ranking?'https://ranking.test':''},AbortSignal,fetch:async(url,options)=>{const path=new URL(url).pathname;requests.push({path,body:options.body?JSON.parse(options.body):null});return {ok:true,json:async()=>path==='/start'?{ticket:'session-'+requests.filter(r=>r.path==='/start').length}:path==='/finish'?{qualified:true,rank:1,entries:[]}:{entries:[]}};},navigator:{maxTouchPoints:mobile?5:0},innerWidth:mobile?390:1366,innerHeight:mobile?844:768,matchMedia:q=>({matches:q==='(pointer: coarse)'?mobile:false}),localStorage:{getItem:()=>null,setItem(){}},performance:{now:()=>0},requestAnimationFrame:f=>raf=f,setTimeout(){},clearTimeout(){},addEventListener:(n,f)=>(win[n]??=[]).push(f)};
+ if(fullscreen.support){
+  document.documentElement.requestFullscreen=async options=>{fullCalls.push(['enter',options]);if(fullscreen.reject)throw Error('denied');document.fullscreenElement=document.documentElement;(win.fullscreenchange||[]).forEach(f=>f());};
+  document.exitFullscreen=async()=>{fullCalls.push(['exit']);document.fullscreenElement=null;(win.fullscreenchange||[]).forEach(f=>f());};
+ }
+ sandbox.window.screen={orientation:{lock:async value=>{fullCalls.push(['lock',value]);if(fullscreen.lockReject)throw Error('unsupported');},unlock:()=>fullCalls.push(['unlock'])}};
+ if(fullscreen.noLock)delete sandbox.window.screen.orientation.lock;
+ if(fullscreen.iphone)sandbox.navigator.userAgent='iPhone';
  vm.createContext(sandbox);for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))vm.runInContext(m[1],sandbox);
  vm.runInContext(fs.readFileSync(new URL('../mobile.js',import.meta.url),'utf8'),sandbox);
  if(ranking)vm.runInContext(fs.readFileSync(new URL('../ranking.js',import.meta.url),'utf8'),sandbox);
- return {requests,element,read:s=>vm.runInContext(s,sandbox),fire:n=>(win[n]||[]).forEach(f=>f()),frame:t=>raf(t)};
+ return {requests,fullCalls,element,read:s=>vm.runInContext(s,sandbox),fire:n=>(win[n]||[]).forEach(f=>f()),frame:t=>raf(t)};
 }
 const g=game();assert.equal(g.read('W'),600);assert.equal(g.read('H'),850);assert.equal(g.read('fmt(83.456)'), '01:23.456');assert.equal(g.read('fmt(59.9996)'), '01:00.000');assert.equal(g.read('fmt(0)'), '00:00.000');g.element('entrada-iniciar').fire('click');assert.equal(g.read('estado'),'play');
 g.element('mobile-joy').fire('pointerdown',{clientX:100,clientY:60});assert.ok(g.read('joy.x')>.9);
@@ -51,3 +59,13 @@ practice.read("estado='vitoria';update(0)");await new Promise(setImmediate);prac
 // Mesmo se o modo for alterado durante a tentativa, a elegibilidade não volta ao desligá-lo.
 const toggled=game(true,true);toggled.read('novaPartida()');await new Promise(setImmediate);toggled.read("modoTreino=true;update(0);modoTreino=false;runT=20;estado='vitoria';update(0)");await new Promise(setImmediate);toggled.element('rank-form').fire('submit');await new Promise(setImmediate);assert.equal(toggled.requests.filter(r=>r.path==='/finish').length,0);
 console.log('OK: treino sem cronômetro, sem sessão elegível e sem envio de resultado ao ranking.');
+
+// Tela cheia preserva o tempo e a fase, solicita horizontal e libera orientação ao sair.
+const full=game(true,false,{support:true});full.read('novaPartida();fase=3;runT=10.123');await full.element('mobile-fullscreen').fire('click');
+assert.equal(full.read('pausado'),true);assert.equal(full.read('fase'),3);assert.equal(full.read('runT'),10.123);assert.ok(full.fullCalls.some(c=>c[0]==='enter'));assert.ok(full.fullCalls.some(c=>c[0]==='lock'&&c[1]==='landscape'));
+await full.element('mobile-fullscreen').fire('click');assert.ok(full.fullCalls.some(c=>c[0]==='exit'));assert.ok(full.fullCalls.some(c=>c[0]==='unlock'));
+// Orientação negada não desfaz a tela cheia, e a interface oferece rotação manual.
+const noLock=game(true,false,{support:true,lockReject:true});await noLock.element('entrada-tela-cheia').fire('click');await new Promise(setImmediate);assert.match(noLock.element('fullscreen-message').textContent,/manualmente/);assert.ok(noLock.read('Boolean(document.fullscreenElement)'));
+const denied=game(true,false,{support:true,reject:true});await denied.element('entrada-tela-cheia').fire('click');assert.match(denied.element('fullscreen-message').textContent,/Não foi possível/);assert.equal(denied.read('Boolean(document.fullscreenElement)'),false);
+const iphone=game(true,false,{iphone:true});await iphone.element('entrada-tela-cheia').fire('click');assert.match(iphone.element('fullscreen-message').textContent,/Adicionar à Tela de Início/);
+console.log('OK: tela cheia, horizontal, saída e desbloqueio; recusa e iPhone exibem orientação sem interromper a partida.');

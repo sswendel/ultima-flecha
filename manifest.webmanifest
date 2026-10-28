@@ -1,0 +1,12 @@
+{
+ "name":"A Última Flecha",
+ "short_name":"Última Flecha",
+ "lang":"pt-BR",
+ "start_url":"./",
+ "scope":"./",
+ "display":"fullscreen",
+ "orientation":"landscape",
+ "background_color":"#05060b",
+ "theme_color":"#05060b",
+ "icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+}

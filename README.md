@@ -70,3 +70,10 @@ O top 10 global está ativo e grava em `ranking.json` no GitHub, sem banco de da
 ## Verificação
 
 `node tests/mobile.mjs` verifica lógica de controles, pausa e cronômetro com elementos simulados. `node tests/ranking.mjs` verifica regras do ranking e conflitos de gravação com uma API simulada. Esses testes não substituem a avaliação dos controles em um aparelho físico.
+
+
+## Tela cheia no celular
+
+Use o botão ⛶ no canto da entrada ou ao lado de Pausar durante a partida. Ele pede tela cheia para o documento inteiro, incluindo controles e ranking, e tenta fixar a orientação horizontal. O jogo pausa durante a mudança para preservar a tentativa e o cronômetro. Toque em Continuar para voltar a jogar. O mesmo botão sai da tela cheia e libera a orientação.
+
+A permissão depende do navegador e exige um toque do usuário. Se a rotação automática não for aceita, a tela cheia continua e um aviso orienta girar o aparelho manualmente. No iPhone sem suporte à tela cheia de páginas, use Compartilhar → Adicionar à Tela de Início e abra pelo ícone; os metadados e o manifesto permitem abrir como aplicativo, conforme o suporte do aparelho. Isso não acrescenta funcionamento offline.

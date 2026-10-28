@@ -59,6 +59,49 @@
  cv.addEventListener('pointermove',e=>{if(e.pointerId===aimId){e.preventDefault();posMouse(e);}});
  cv.addEventListener('pointerup',e=>{if(e.pointerId!==aimId)return;posMouse(e);atirar();aimId=null;manual=false;});
  ['pointercancel','lostpointercapture'].forEach(n=>cv.addEventListener(n,e=>{if(e.pointerId===aimId){aimId=null;manual=false;}}));
+ // Tela cheia do documento inteiro mantém os controles e os diálogos visíveis.
+ const fullButtons=[document.getElementById('entrada-tela-cheia'),document.getElementById('mobile-fullscreen')];
+ const notice=document.getElementById('fullscreen-note'),message=document.getElementById('fullscreen-message');
+ let fullBusy=false,lockAttempted=false,ownsOrientation=false,noticeTimer;
+ const isFull=()=>Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+ function tell(text){clearTimeout(noticeTimer);message.textContent=text;notice.hidden=false;noticeTimer=setTimeout(()=>{notice.hidden=true;},8000);}
+ document.getElementById('fullscreen-dismiss').addEventListener('click',()=>{notice.hidden=true;clearTimeout(noticeTimer);});
+ function releaseOrientation(){if(ownsOrientation){try{window.screen?.orientation?.unlock?.();}catch{}ownsOrientation=false;}}
+ function syncFull(){
+  const active=isFull();
+  for(const b of fullButtons){b.setAttribute('aria-pressed',String(active));b.setAttribute('aria-label',active?'Sair da tela cheia':'Tela cheia e girar para horizontal');b.title=active?'Sair da tela cheia':'Tela cheia e girar para horizontal';}
+  if(!active){releaseOrientation();lockAttempted=false;}
+ }
+ async function lockLandscape(){
+  if(!toque || !isFull() || lockAttempted)return;
+  lockAttempted=true;
+  const orientation=window.screen?.orientation;
+  if(!orientation?.lock){tell('Tela cheia ativada. Gire o celular para jogar na horizontal.');return;}
+  try{await orientation.lock('landscape');if(isFull()){ownsOrientation=true;}else{orientation.unlock?.();}}
+  catch{if(isFull())tell('Tela cheia ativada. Este navegador pede que você gire o celular manualmente.');}
+ }
+ async function toggleFullscreen(){
+  if(fullBusy)return;
+  fullBusy=true;notice.hidden=true;suspend();
+  try{
+   if(isFull()){
+    const exit=document.exitFullscreen || document.webkitExitFullscreen;
+    if(!exit){tell('Use o botão Voltar ou a opção do navegador para sair da tela cheia.');return;}
+    releaseOrientation();await exit.call(document);
+   }else{
+    const root=document.documentElement,enter=root.requestFullscreen || root.webkitRequestFullscreen;
+    if(!enter){if(navigator.standalone===true || matchMedia('(display-mode: standalone)').matches){tell('O jogo já está em modo aplicativo. Gire o celular para a horizontal.');return;}tell(/iPhone|iPod/i.test(navigator.userAgent||'')?'No iPhone, abra Compartilhar → Adicionar à Tela de Início e abra o jogo pelo ícone. Gire o celular para a horizontal.':'Este navegador não permite tela cheia para o jogo. Gire o celular para aproveitar a tela na horizontal.');return;}
+    lockAttempted=false;
+    if(root.requestFullscreen)await root.requestFullscreen({navigationUI:'hide'});else await enter.call(root);
+    await lockLandscape();
+   }
+  }catch{tell('Não foi possível abrir a tela cheia. Tente novamente pelo botão ou gire o celular para a horizontal.');}
+  finally{fullBusy=false;syncFull();}
+ }
+ function fullChanged(){syncFull();if(isFull())void lockLandscape();else{notice.hidden=true;suspend();}if(toque)resizeArena();}
+ ['fullscreenchange','webkitfullscreenchange'].forEach(event=>document.addEventListener(event,fullChanged));
+ fullButtons.forEach(button=>button.addEventListener('click',toggleFullscreen));
+ window.alternarTelaCheia=toggleFullscreen;syncFull();
  document.getElementById('mobile-pause').addEventListener('click',()=>{if(estado==='play'){pausado=!pausado;reset();resume();}});
  function suspend(){reset();if(estado==='play')pausado=true;}
  addEventListener('blur',suspend);document.addEventListener('visibilitychange',()=>{if(document.hidden)suspend();});
