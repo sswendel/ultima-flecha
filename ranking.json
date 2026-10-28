@@ -32,12 +32,22 @@
       "ms": 29265,
       "date": "2026-10-27T23:52:12.677Z",
       "device": "desktop"
+    },
+    {
+      "id": "35643aec-8b94-4d28-9f33-850d7f68cb83",
+      "name": "pedro",
+      "ms": 31169,
+      "date": "2026-10-28T01:03:30.828Z",
+      "device": "touch",
+      "mode": "normal",
+      "rules": 2
     }
   ],
   "used": [
     "67971d3c-91c6-4e32-b663-38552f1ff09c",
     "5f4be1ef-253d-4903-8e70-babd794bd6eb",
     "b3c294b8-2bca-4ec5-8ff4-71d22e1fab62",
-    "d730d448-d65b-429c-ae94-32f4499f4c38"
+    "d730d448-d65b-429c-ae94-32f4499f4c38",
+    "35643aec-8b94-4d28-9f33-850d7f68cb83"
   ]
 }
