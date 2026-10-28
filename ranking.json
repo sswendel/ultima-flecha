@@ -18,6 +18,15 @@
       "rules": 2
     },
     {
+      "id": "d730d448-d65b-429c-ae94-32f4499f4c38",
+      "name": "pedro",
+      "ms": 28964,
+      "date": "2026-10-28T01:00:21.557Z",
+      "device": "touch",
+      "mode": "normal",
+      "rules": 2
+    },
+    {
       "id": "67971d3c-91c6-4e32-b663-38552f1ff09c",
       "name": "iuri",
       "ms": 29265,
@@ -28,6 +37,7 @@
   "used": [
     "67971d3c-91c6-4e32-b663-38552f1ff09c",
     "5f4be1ef-253d-4903-8e70-babd794bd6eb",
-    "b3c294b8-2bca-4ec5-8ff4-71d22e1fab62"
+    "b3c294b8-2bca-4ec5-8ff4-71d22e1fab62",
+    "d730d448-d65b-429c-ae94-32f4499f4c38"
   ]
 }
