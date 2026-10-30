@@ -9,6 +9,15 @@
       "device": "desktop"
     },
     {
+      "id": "cf195ed9-7ae7-4555-807f-4734be417338",
+      "name": "Iuri",
+      "ms": 17172,
+      "date": "2026-10-30T02:15:19.495Z",
+      "device": "touch",
+      "mode": "normal",
+      "rules": 2
+    },
+    {
       "id": "617bd715-0f59-4725-9c7c-69b3b5fae753",
       "name": "murilo",
       "ms": 18260,
@@ -78,6 +87,7 @@
     "35643aec-8b94-4d28-9f33-850d7f68cb83",
     "c2a55da0-96ab-402f-90e1-f513d6c1c4a9",
     "205acb87-c8a0-4b8c-b077-ab3a446ff063",
-    "617bd715-0f59-4725-9c7c-69b3b5fae753"
+    "617bd715-0f59-4725-9c7c-69b3b5fae753",
+    "cf195ed9-7ae7-4555-807f-4734be417338"
   ]
 }
